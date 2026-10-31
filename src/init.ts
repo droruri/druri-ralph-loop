@@ -1,7 +1,7 @@
 // `ralph init`: writes `.ralph/config.json` from detected defaults and answers, and gitignores the
 // loop's worktrees and logs.
 import { execFile } from 'node:child_process';
-import { access, appendFile, readFile } from 'node:fs/promises';
+import { appendFile, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { agentFiles } from './agents.ts';
@@ -11,11 +11,12 @@ import {
   getIn,
   invalidConfig,
   parseConfig,
-  parseValue,
   saveConfig,
   SCHEMA_REF,
   setIn,
+  setValue,
 } from './config.ts';
+import { exists, isNotFound } from './fs.ts';
 
 const run = promisify(execFile);
 
@@ -23,19 +24,29 @@ const run = promisify(execFile);
 const PROMPTS = [
   'repo',
   'labels.pickLabel',
+  'labels.blocked',
+  'labels.needsHuman',
+  'labels.lock',
   'models.build',
   'models.review',
   'models.merge',
+  'models.escalation',
+  'phases',
+  'smallDiffLines',
   'commands.install',
   'commands.check',
+  'commands.diffExclude',
   'specDoc',
   'subagents.investigator',
   'subagents.planner',
   'subagents.reviewer.type',
+  'subagents.reviewer.parallel',
   'subagents.browserCheck',
   'skills.tdd',
   'skills.plan',
+  'plugins',
   'merge.method',
+  'merge.auto',
 ];
 
 const GITIGNORE_LINES = ['.ralph/wt/', '.ralph/logs/'];
@@ -73,19 +84,24 @@ export async function init({ cwd, yes, ask, log }: InitOptions): Promise<void> {
     repo: await detectRepo(root),
     'commands.install': await detectInstall(root),
   };
-  // Defaults of the schema, for showing next to each prompt.
+  // Defaults of the schema, shown next to each prompt; `repo` has none.
   const defaults = parseConfig({ repo: 'owner/name' });
 
   if (!yes && agents.length > 0) log(`Agent types in .claude/agents: ${agents.join(', ')}`);
   let raw: Record<string, unknown> = { $schema: SCHEMA_REF };
   for (const key of PROMPTS) {
-    const schemaDefault = defaults.ok ? getIn(defaults.config, key) : undefined;
-    const shown = detected[key] ?? (typeof schemaDefault === 'string' ? schemaDefault : '');
+    const schemaDefault = defaults.ok && key !== 'repo' ? getIn(defaults.config, key) : undefined;
+    const detectedValue = detected[key] ?? '';
+    const shown =
+      detectedValue !== '' || schemaDefault === undefined
+        ? detectedValue
+        : typeof schemaDefault === 'string'
+          ? schemaDefault
+          : JSON.stringify(schemaDefault);
     const answer = yes ? '' : (await ask(`${key} [${shown}]: `)).trim();
-    const value = answer === '' ? shown : parseValue(answer);
-    // Keep the file short: only what differs from the schema's own default.
-    if (value === schemaDefault || (value === '' && schemaDefault === undefined)) continue;
-    raw = setIn(raw, key, value);
+    // An empty answer keeps the default; only detected values and answers go in the file.
+    if (answer !== '') raw = setValue(raw, key, answer);
+    else if (detectedValue !== '') raw = setIn(raw, key, detectedValue);
   }
 
   const result = parseConfig(raw);
@@ -128,21 +144,13 @@ async function ignoreRalphDirs(root: string): Promise<void> {
   let text = '';
   try {
     text = await readFile(path, 'utf8');
-  } catch {
+  } catch (error) {
     // No .gitignore yet: appendFile creates it.
+    if (!isNotFound(error)) throw error;
   }
   const present = new Set(text.split('\n').map((line) => line.trim()));
   const missing = GITIGNORE_LINES.filter((line) => !present.has(line));
   if (missing.length === 0) return;
   const separator = text === '' || text.endsWith('\n') ? '' : '\n';
   await appendFile(path, `${separator}${missing.join('\n')}\n`);
-}
-
-async function exists(path: string): Promise<boolean> {
-  try {
-    await access(path);
-    return true;
-  } catch {
-    return false;
-  }
 }

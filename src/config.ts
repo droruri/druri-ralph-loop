@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 import { z } from 'zod';
+import { isNotFound } from './fs.ts';
 
 export const CONFIG_PATH = '.ralph/config.json';
 export const SCHEMA_PATH = '.ralph/config.schema.json';
@@ -116,7 +117,7 @@ export async function readRawConfig(root: string): Promise<unknown> {
   try {
     text = await readFile(path, 'utf8');
   } catch (error) {
-    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+    if (isNotFound(error)) {
       throw new ConfigError(`${CONFIG_PATH} not found; run \`ralph init\``, { cause: error });
     }
     throw error;
@@ -192,9 +193,20 @@ export function parseValue(text: string): unknown {
   }
 }
 
+/**
+ * Copy of `raw` with the dotted key set from CLI text: as JSON when that makes the config valid,
+ * else as the raw string, so `labels.blocked 2024` stays a string.
+ */
+export function setValue(raw: unknown, key: string, text: string): JsonObject {
+  const parsed = setIn(raw, key, parseValue(text));
+  if (parseConfig(parsed).ok) return parsed;
+  const asString = setIn(raw, key, text);
+  return parseConfig(asString).ok ? asString : parsed;
+}
+
 /** Sets a dotted key in the project's config; saves only when the whole config stays valid. */
 export async function setConfigValue(root: string, key: string, text: string): Promise<void> {
-  const raw = setIn(await readRawConfig(root), key, parseValue(text));
+  const raw = setValue(await readRawConfig(root), key, text);
   const result = parseConfig(raw);
   if (!result.ok) throw invalidConfig(result.errors);
   await saveConfig(root, raw);

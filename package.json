@@ -5,7 +5,7 @@
   "type": "module",
   "packageManager": "pnpm@10.34.5",
   "engines": {
-    "node": ">=20"
+    "node": "^22.18.0 || ^24.11.0 || >=26.0.0"
   },
   "bin": {
     "ralph": "dist/bin.js"
@@ -15,7 +15,6 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "prepare": "tsc -p tsconfig.build.json",
     "lint": "vp lint && vp fmt --check",
     "format": "vp fmt",
     "typecheck": "tsc -p .",

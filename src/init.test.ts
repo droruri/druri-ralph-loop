@@ -90,11 +90,17 @@ describe('init with prompts', () => {
       'models.build': 'opus',
       'commands.check': 'pnpm check',
       'subagents.browserCheck': 'e2e',
+      smallDiffLines: '80',
+      phases: '["build"]',
+      'merge.auto': 'false',
     });
     await run({ yes: false, ask: prompter.ask });
 
     expect(prompter.questions).toContain('repo [acme/app]: ');
     expect(prompter.questions).toContain('commands.install [npm ci]: ');
+    expect(prompter.questions).toContain('smallDiffLines [150]: ');
+    expect(prompter.questions).toContain('labels.lock [ralph:running]: ');
+    expect(prompter.questions).toContain('plugins [[]]: ');
     expect(output).toContain('Agent types in .claude/agents: e2e');
     const config = JSON.parse(await readText('.ralph/config.json'));
     expect(config).toEqual({
@@ -104,6 +110,9 @@ describe('init with prompts', () => {
       models: { build: 'opus' },
       commands: { install: 'npm ci', check: 'pnpm check' },
       subagents: { browserCheck: 'e2e' },
+      smallDiffLines: 80,
+      phases: ['build'],
+      merge: { auto: false },
     });
   });
 

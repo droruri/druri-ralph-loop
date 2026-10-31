@@ -88,6 +88,13 @@ describe('config get and set', () => {
     });
   });
 
+  test('set keeps a JSON-looking value as a string where the key expects one', async () => {
+    await setConfigValue(root, 'labels.blocked', '2024');
+    await setConfigValue(root, 'models.review', 'true');
+    expect(await getConfigValue(root, 'labels.blocked')).toBe('2024');
+    expect(await getConfigValue(root, 'models.review')).toBe('true');
+  });
+
   test('set rejects an invalid value and leaves the file unchanged', async () => {
     const before = await readFileText();
     await expect(setConfigValue(root, 'smallDiffLines', 'many')).rejects.toThrow(

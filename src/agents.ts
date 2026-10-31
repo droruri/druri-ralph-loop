@@ -1,8 +1,9 @@
 // Which Claude Code agent types a project can use: built-ins, `.claude/agents/*.md` and the agents
 // of enabled plugins (`plugin:agent`).
-import { access, readdir, readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
+import { exists, isNotFound } from './fs.ts';
 
 const BUILT_IN = new Set([
   'general-purpose',
@@ -17,8 +18,9 @@ export async function agentFiles(dir: string): Promise<string[]> {
   let entries: string[];
   try {
     entries = await readdir(join(dir, '.claude/agents'));
-  } catch {
-    return [];
+  } catch (error) {
+    if (isNotFound(error)) return [];
+    throw error;
   }
   return entries
     .filter((name) => name.endsWith('.md'))
@@ -41,15 +43,6 @@ async function readJson<T>(path: string, schema: z.ZodType<T>): Promise<T | unde
     return result.success ? result.data : undefined;
   } catch {
     return undefined;
-  }
-}
-
-async function exists(path: string): Promise<boolean> {
-  try {
-    await access(path);
-    return true;
-  } catch {
-    return false;
   }
 }
 

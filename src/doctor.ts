@@ -3,6 +3,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { missingAgentTypes } from './agents.ts';
 import { type Config, loadConfig } from './config.ts';
+import { isNotFound } from './fs.ts';
 
 const run = promisify(execFile);
 
@@ -52,7 +53,7 @@ async function command(
     const { stdout } = await run(file, args, { env });
     return { ok: true, detail: describe(stdout) };
   } catch (error) {
-    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+    if (isNotFound(error)) {
       return { ok: false, detail: `${file} not found on PATH` };
     }
     const stderr = error instanceof Error && 'stderr' in error ? String(error.stderr).trim() : '';
