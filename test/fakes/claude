@@ -1,0 +1,8 @@
+#!/bin/sh
+# Fake `claude` for tests. Never calls a model.
+if [ "$1" = --version ]; then
+  echo "9.9.9 (Claude Code)"
+  exit 0
+fi
+echo "fake claude: unsupported command: $*" >&2
+exit 1

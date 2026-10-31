@@ -1,0 +1,12 @@
+#!/bin/sh
+# Fake `gh` for tests. `gh auth status` passes unless FAKE_GH_AUTH=fail.
+if [ "$1" = auth ] && [ "$2" = status ]; then
+  if [ "$FAKE_GH_AUTH" = fail ]; then
+    echo "You are not logged into any GitHub hosts. To log in, run: gh auth login" >&2
+    exit 1
+  fi
+  echo "github.com: Logged in to github.com account fake"
+  exit 0
+fi
+echo "fake gh: unsupported command: $*" >&2
+exit 1

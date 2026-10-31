@@ -1,0 +1,32 @@
+{
+  "name": "druri-ralph-loop",
+  "version": "0.0.0",
+  "description": "ralph: run the ralph issue loop (build, review, merge with Claude Code) in any GitHub project",
+  "type": "module",
+  "packageManager": "pnpm@10.34.5",
+  "engines": {
+    "node": "^22.18.0 || ^24.11.0 || >=26.0.0"
+  },
+  "bin": {
+    "ralph": "dist/bin.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "lint": "vp lint && vp fmt --check",
+    "format": "vp fmt",
+    "typecheck": "tsc -p .",
+    "test": "vp test run"
+  },
+  "dependencies": {
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "typescript": "~6.0.3",
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.4.0",
+    "vite-plus": "1.4.0"
+  }
+}
