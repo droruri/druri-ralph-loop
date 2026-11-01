@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, test } from 'vite-plus/test';
 import { parseConfig, type Config } from './config.ts';
-import { fakeGh } from './gh.fake.ts';
+import { fakeGh, Pages } from './gh.fake.ts';
 import { blockedBy, createTracker, GhError, ghCli } from './github.ts';
 
 function config(raw: Record<string, unknown> = {}): Config {
@@ -122,6 +122,16 @@ describe('nextIssue', () => {
       { number: 6 },
     ]);
     expect((await createTracker(config(), fake.gh).nextIssue())?.number).toBe(5);
+  });
+
+  test('reads every page of open issues', async () => {
+    const fake = fakeGh({
+      [`GET ${R}/issues?state=open&per_page=100`]: new Pages([
+        [issue({ number: 5, labels: ['ready-for-agent'] })],
+        [issue({ number: 4, labels: ['ready-for-agent'] })],
+      ]),
+    });
+    expect((await createTracker(config(), fake.gh).nextIssue())?.number).toBe(4);
   });
 
   test('undefined when no issue qualifies', async () => {
@@ -303,6 +313,24 @@ describe('merge', () => {
     expect(fake.writes()).toEqual([]);
   });
 
+  test('a repo with only a green legacy status merges', async () => {
+    const { merge } = setup({
+      [`GET ${R}/commits/abc/check-runs?per_page=100`]: { check_runs: [] },
+      [`GET ${R}/commits/abc/status`]: {
+        state: 'success',
+        total_count: 1,
+        statuses: [{ context: 'ci/legacy', state: 'success' }],
+      },
+    });
+    expect(await merge()).toBe(true);
+  });
+
+  test('a GitHub error after the merge is a warning; the merge still counts', async () => {
+    const { log, merge } = setup({ [`GET ${R}/issues/7`]: new Error('502') });
+    expect(await merge()).toBe(true);
+    expect(log).toContain('warn: PR #30 merged, but closing #7 or unblocking failed: 502');
+  });
+
   test('no checks after the grace polls needs the LLM phase', async () => {
     const { fake, log, merge } = setup({
       [`GET ${R}/commits/abc/check-runs?per_page=100`]: { check_runs: [] },
@@ -349,6 +377,48 @@ describe('merge', () => {
     const opened = fake.calls.find((c) => c.path === `${R}/issues`);
     expect(opened?.fields.title).toEqual(['main is red: test']);
     expect(opened?.fields['labels[]']).toEqual(['ready-for-agent']);
+  });
+
+  test('a GitHub error while polling CI is retried', async () => {
+    let polls = 0;
+    const { merge } = setup({
+      [`GET ${R}/commits/abc/check-runs?per_page=100`]: () =>
+        ++polls === 1 ? new Error('502') : green,
+    });
+    expect(await merge()).toBe(true);
+    expect(polls).toBe(2);
+  });
+
+  test('the main-red issue has no label when pickLabel is empty', async () => {
+    const fake = fakeGh({
+      [`GET ${R}/pulls?head=acme%3Afeature%2Fissue-7&state=open`]: [
+        { number: 30, head: { sha: 'abc' } },
+      ],
+      [`GET ${R}/commits/abc/check-runs?per_page=100`]: red('test'),
+      [`GET ${R}/commits/abc/status`]: noStatus,
+      [`GET ${R}/commits/main`]: { sha: 'main1' },
+      [`GET ${R}/commits/main1/check-runs?per_page=100`]: red('test'),
+      [`GET ${R}/commits/main1/status`]: noStatus,
+      [`GET ${R}/issues/7`]: issue({ number: 7, state: 'closed' }),
+      [`GET ${R}/issues?state=open&per_page=100`]: [],
+    });
+    const tracker = createTracker(config({ labels: { pickLabel: '' } }), fake.gh);
+    expect(await tracker.merge(7, { sleep: async () => {} })).toBe(true);
+    const opened = fake.calls.find((c) => c.path === `${R}/issues`);
+    expect(opened?.fields).not.toHaveProperty('labels[]');
+  });
+
+  test('one failed unblock does not stop the others', async () => {
+    const { fake, merge } = setup({
+      [`GET ${R}/issues/7`]: issue({ number: 7, state: 'closed' }),
+      [`GET ${R}/issues?state=open&per_page=100`]: [
+        issue({ number: 8, labels: ['blocked'], body: '## Blocked by\n- #7' }),
+        issue({ number: 9, labels: ['blocked'], body: '## Blocked by\n- #7' }),
+      ],
+      [`DELETE ${R}/issues/8/labels/blocked`]: new Error('500'),
+    });
+    expect(await merge()).toBe(true);
+    expect(fake.writes()).toContain(`DELETE ${R}/issues/9/labels/blocked`);
   });
 
   test('a refused merge needs the LLM phase', async () => {

@@ -79,6 +79,9 @@ export interface MergeOptions {
   sleep?: (ms: number) => Promise<void>;
 }
 
+/** The branch the loop works on for issue `n`. */
+export const branchName = (n: number) => `feature/issue-${n}`;
+
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 export type Tracker = ReturnType<typeof createTracker>;
@@ -114,16 +117,14 @@ export function createTracker(
     return result.data;
   }
 
-  /** Every item of a paginated list endpoint. */
-  async function list<T>(item: z.ZodType<T>, path: string): Promise<T[]> {
-    const pages = await api(z.array(z.array(item)), ['--paginate', '--slurp', path]);
-    return pages.flat();
-  }
-
-  /** Every page of a paginated endpoint whose pages are objects. */
+  /** Every page of a paginated endpoint (`--paginate --slurp`). */
   async function pages<T>(page: z.ZodType<T>, path: string): Promise<T[]> {
     return api(z.array(page), ['--paginate', '--slurp', path]);
   }
+
+  /** Every item of a paginated list endpoint. */
+  const list = async <T>(item: z.ZodType<T>, path: string) =>
+    (await pages(z.array(item), path)).flat();
 
   const hasLabel = (issue: Issue, name: string) => issue.labels.some((l) => l.name === name);
   const getIssue = (n: number) => api(Issue, [`${repo}/issues/${n}`]);
@@ -155,7 +156,11 @@ export function createTracker(
       if (!hasLabel(issue, labels.blocked) || blockedBy(issue.body) === undefined) continue;
       if (!unblocked(issue, open)) continue;
       log(`Unblocking #${issue.number}`);
-      await removeLabel(issue.number, labels.blocked);
+      try {
+        await removeLabel(issue.number, labels.blocked);
+      } catch (error) {
+        log(`warn: could not unblock #${issue.number}: ${message(error)}`);
+      }
     }
   }
 
@@ -166,40 +171,48 @@ export function createTracker(
 
   const progressFile = (cwd: string, n: number) => join(cwd, 'logs', `issue-${n}.progress.md`);
 
-  /** CI state of a commit from its check runs and legacy commit statuses. */
-  async function checkState(sha: string): Promise<CheckState> {
+  /** Check runs and legacy commit statuses of a commit. */
+  async function ciChecks(sha: string) {
     const runs = (
       await pages(CheckRunsPage, `${repo}/commits/${sha}/check-runs?per_page=100`)
     ).flatMap((page) => page.check_runs);
+    const statusPages = await pages(CombinedStatus, `${repo}/commits/${sha}/status`);
+    return { runs, status: statusPages[0], statuses: statusPages.flatMap((p) => p.statuses) };
+  }
+
+  /** CI state of a commit from its check runs and legacy commit statuses. */
+  async function checkState(sha: string): Promise<CheckState> {
+    const { runs, status } = await ciChecks(sha);
     let runState: CheckState;
     if (runs.length === 0) runState = 'none';
     else if (runs.some((r) => r.status !== 'completed')) runState = 'pending';
     else if (runs.some((r) => !OK_CONCLUSIONS.has(r.conclusion ?? ''))) runState = 'red';
     else runState = 'green';
 
-    const status = await api(CombinedStatus, [`${repo}/commits/${sha}/status`]);
-    if (status.total_count === 0) return runState;
+    if (status === undefined || status.total_count === 0) return runState;
     if (status.state === 'failure' || status.state === 'error') return 'red';
-    if (status.state === 'pending' && runState === 'green') return 'pending';
+    const statusState = status.state === 'success' ? 'green' : 'pending';
+    // A repo with only legacy statuses has no check runs.
+    if (runState === 'none') return statusState;
+    if (statusState === 'pending' && runState === 'green') return 'pending';
     return runState;
   }
 
   /** Names of failing check runs and legacy statuses of a commit, sorted and unique. */
   async function failingChecks(sha: string): Promise<string[]> {
-    const runs = (await pages(CheckRunsPage, `${repo}/commits/${sha}/check-runs?per_page=100`))
-      .flatMap((page) => page.check_runs)
-      .filter((r) => r.status === 'completed' && !OK_CONCLUSIONS.has(r.conclusion ?? ''))
-      .map((r) => r.name);
-    const statuses = (await pages(CombinedStatus, `${repo}/commits/${sha}/status`))
-      .flatMap((page) => page.statuses)
-      .filter((s) => s.state === 'failure' || s.state === 'error')
-      .map((s) => s.context);
-    return [...new Set([...runs, ...statuses])].sort();
+    const { runs, statuses } = await ciChecks(sha);
+    const failing = [
+      ...runs
+        .filter((r) => r.status === 'completed' && !OK_CONCLUSIONS.has(r.conclusion ?? ''))
+        .map((r) => r.name),
+      ...statuses.filter((s) => s.state === 'failure' || s.state === 'error').map((s) => s.context),
+    ];
+    return [...new Set(failing)].sort();
   }
 
   async function findPr(n: number): Promise<{ number: number; sha: string } | undefined> {
     const owner = config.repo.split('/')[0] ?? '';
-    const head = encodeURIComponent(`${owner}:feature/issue-${n}`);
+    const head = encodeURIComponent(`${owner}:${branchName(n)}`);
     const pulls = await api(z.array(Pull), [`${repo}/pulls?head=${head}&state=open`]);
     const pr = pulls[0];
     return pr && { number: pr.number, sha: pr.head.sha };
@@ -219,7 +232,7 @@ export function createTracker(
     const title = `main is red: ${check}`;
     let issues;
     try {
-      issues = await list(Issue, `${repo}/issues?state=open&per_page=100`);
+      issues = await openIssues();
     } catch {
       warn(`warn: could not list open issues; not opening '${title}'.`);
       return;
@@ -314,7 +327,7 @@ export function createTracker(
      */
     async merge(n: number, { sleep = wait }: MergeOptions = {}): Promise<boolean> {
       const out = log;
-      const branch = `feature/issue-${n}`;
+      const branch = branchName(n);
       let pr;
       try {
         pr = await findPr(n);
@@ -383,12 +396,19 @@ export function createTracker(
         // Already deleted, e.g. by the repo's auto-delete setting.
       }
 
-      // "Closes #N" normally closes the issue; close it explicitly if the PR body lacked it.
-      if ((await getIssue(n)).state !== 'closed') {
-        await comment(n, `Merged in #${pr.number}.`);
-        await call(['-X', 'PATCH', `${repo}/issues/${n}`, '-f', 'state=closed']);
+      // The PR is merged: from here on a failure is a warning, not a reason to run Claude.
+      try {
+        // "Closes #N" normally closes the issue; close it explicitly if the PR body lacked it.
+        if ((await getIssue(n)).state !== 'closed') {
+          await comment(n, `Merged in #${pr.number}.`);
+          await call(['-X', 'PATCH', `${repo}/issues/${n}`, '-f', 'state=closed']);
+        }
+        await unblockDependents();
+      } catch (error) {
+        out(
+          `warn: PR #${pr.number} merged, but closing #${n} or unblocking failed: ${message(error)}`,
+        );
       }
-      await unblockDependents();
       out(`PR #${pr.number} merged; issue #${n} closed.`);
       return true;
     },

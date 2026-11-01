@@ -85,6 +85,29 @@ describe('ralph', () => {
     expect(out).toEqual(['No open PR for feature/issue-7.']);
   });
 
+  test('merge exits 0 when the PR is merged', async () => {
+    await saveConfig(root, { repo: 'acme/app' });
+    gh = fakeGh({
+      'GET repos/acme/app/pulls?head=acme%3Afeature%2Fissue-7&state=open': [
+        { number: 30, head: { sha: 'abc' } },
+      ],
+      'GET repos/acme/app/commits/abc/check-runs': {
+        check_runs: [{ name: 'check', status: 'completed', conclusion: 'success' }],
+      },
+      'GET repos/acme/app/commits/abc/status': { state: 'pending', total_count: 0, statuses: [] },
+      'GET repos/acme/app/issues/7': {
+        number: 7,
+        title: 't',
+        body: '',
+        state: 'closed',
+        labels: [],
+      },
+      'GET repos/acme/app/issues': [],
+    });
+    expect(await ralph('merge', '7')).toBe(0);
+    expect(out.at(-1)).toBe('PR #30 merged; issue #7 closed.');
+  });
+
   test('a malformed gh response exits 1 with a clear error', async () => {
     await saveConfig(root, { repo: 'acme/app' });
     gh = fakeGh({ 'GET repos/acme/app/issues/7/comments?per_page=100': { oops: true } });

@@ -2,6 +2,11 @@
 // every call. Never touches the network.
 import type { Gh } from './github.ts';
 
+/** A reply served as several pages to `--paginate --slurp`. */
+export class Pages {
+  constructor(readonly pages: unknown[]) {}
+}
+
 export interface GhCall {
   method: string;
   path: string;
@@ -38,6 +43,7 @@ export function fakeGh(routes: Record<string, unknown> = {}): FakeGh {
     const reply = typeof entry === 'function' ? entry(call) : entry;
     if (reply instanceof Error) throw reply;
     if (typeof reply === 'string') return reply;
+    if (reply instanceof Pages) return JSON.stringify(reply.pages);
     const paginate = args.includes('--paginate');
     // `--paginate --slurp` wraps the pages in an array; the fake serves everything as one page.
     return JSON.stringify(paginate ? [reply] : reply);
