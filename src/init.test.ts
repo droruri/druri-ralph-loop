@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, test } from 'vite-plus/test';
+import { renderProjectReadme } from './docs.ts';
 import { init } from './init.ts';
 
 let root = '';
@@ -49,6 +50,7 @@ describe('init --yes', () => {
     });
     const schema = JSON.parse(await readText('.ralph/config.schema.json'));
     expect(schema.required).toEqual(['repo']);
+    expect(await readText('.ralph/README.md')).toBe(renderProjectReadme());
   });
 
   test('appends the ralph lines to .gitignore once and keeps its content', async () => {
@@ -66,6 +68,7 @@ describe('init --yes', () => {
     await writeFile(join(root, '.ralph/config.json'), '{"repo":"acme/kept"}');
     await run({ yes: true });
     expect(await readText('.ralph/config.json')).toBe('{"repo":"acme/kept"}');
+    expect(await readText('.ralph/README.md')).toBe(renderProjectReadme());
   });
 
   test('fails outside a git repository', async () => {

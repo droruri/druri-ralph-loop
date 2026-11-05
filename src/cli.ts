@@ -12,21 +12,12 @@ import {
   setConfigValue,
 } from './config.ts';
 import { doctor } from './doctor.ts';
+import { renderExplain, usage } from './docs.ts';
 import { createTracker, type Gh, GhError, ghCli } from './github.ts';
 import { init } from './init.ts';
 import { renderPrompt } from './prompt.ts';
 
-const USAGE = `Usage: ralph <command>
-
-  ralph init [--yes]               Write .ralph/config.json; --yes takes every default
-  ralph config get <key>           Print a setting, e.g. models.build
-  ralph config set <key> <value>   Change a setting; the value is checked before it is saved
-  ralph doctor                     Check that this project is ready to run the loop
-  ralph progress pull|push <N>     Sync logs/issue-<N>.progress.md with the issue's progress comment
-  ralph merge <N>                  Wait for CI on issue N's PR, merge it, close the issue
-                                   (exit 0 merged, 1 the merge phase needs Claude)
-  ralph prompt build|review|merge <N>
-                                   Print the prompt for one phase of issue N`;
+const USAGE = usage();
 
 export interface Io {
   cwd: string;
@@ -68,9 +59,13 @@ async function dispatch(argv: string[], io: Io): Promise<number> {
   }
   const { values, positionals } = parsed;
   const [command, ...args] = positionals;
-  if (values.help === true || command === undefined) {
+  if (values.help === true) {
+    io.out(renderExplain());
+    return 0;
+  }
+  if (command === undefined) {
     io.out(USAGE);
-    return values.help === true ? 0 : 2;
+    return 2;
   }
 
   switch (command) {
@@ -82,6 +77,10 @@ async function dispatch(argv: string[], io: Io): Promise<number> {
       return 0;
     case 'config':
       return configCommand(args, io);
+    case 'explain':
+      expectArgs(args, 0);
+      io.out(renderExplain());
+      return 0;
     case 'doctor': {
       expectArgs(args, 0);
       const root = await findRoot(io.cwd);

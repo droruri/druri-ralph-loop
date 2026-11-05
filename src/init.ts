@@ -1,7 +1,7 @@
-// `ralph init`: writes `.ralph/config.json` from detected defaults and answers, and gitignores the
-// loop's worktrees and logs.
+// `ralph init`: writes `.ralph/config.json` from detected defaults and answers, writes
+// `.ralph/README.md`, and gitignores the loop's worktrees and logs.
 import { execFile } from 'node:child_process';
-import { appendFile, readFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { agentFiles } from './agents.ts';
@@ -16,6 +16,7 @@ import {
   setIn,
   setValue,
 } from './config.ts';
+import { renderProjectReadme } from './docs.ts';
 import { exists, isNotFound } from './fs.ts';
 
 const run = promisify(execFile);
@@ -49,6 +50,8 @@ const PROMPTS = [
   'merge.auto',
 ];
 
+const README_PATH = '.ralph/README.md';
+
 const GITIGNORE_LINES = ['.ralph/wt/', '.ralph/logs/'];
 
 const LOCKFILE_INSTALL: [lockfile: string, install: string][] = [
@@ -74,7 +77,7 @@ export async function init({ cwd, yes, ask, log }: InitOptions): Promise<void> {
     const overwrite = yes ? '' : await ask(`Overwrite ${CONFIG_PATH}? [y/N] `);
     if (!/^y(es)?$/i.test(overwrite.trim())) {
       log(`Kept the existing ${CONFIG_PATH}.`);
-      await ignoreRalphDirs(root);
+      await writeProjectFiles(root);
       return;
     }
   }
@@ -107,7 +110,7 @@ export async function init({ cwd, yes, ask, log }: InitOptions): Promise<void> {
   const result = parseConfig(raw);
   if (!result.ok) throw invalidConfig(result.errors);
   await saveConfig(root, raw);
-  await ignoreRalphDirs(root);
+  await writeProjectFiles(root);
   log(`Wrote ${CONFIG_PATH}. Change it later with \`ralph config set <key> <value>\`.`);
 }
 
@@ -136,6 +139,13 @@ async function detectInstall(root: string): Promise<string> {
     if (await exists(join(root, lockfile))) return install;
   }
   return '';
+}
+
+/** Writes `.ralph/README.md` (generated, so always overwritten) and the `.gitignore` lines. */
+async function writeProjectFiles(root: string): Promise<void> {
+  await mkdir(join(root, '.ralph'), { recursive: true });
+  await writeFile(join(root, README_PATH), renderProjectReadme());
+  await ignoreRalphDirs(root);
 }
 
 /** Appends the missing ralph lines to `.gitignore`, keeping what is there. */

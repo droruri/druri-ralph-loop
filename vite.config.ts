@@ -163,6 +163,6 @@ export default defineConfig({
     singleQuote: true,
     printWidth: 100,
     sortPackageJson: false,
-    ignorePatterns: ['pnpm-lock.yaml', '.idea/', '.claude/', 'prompts/'],
+    ignorePatterns: ['pnpm-lock.yaml', '.idea/', '.claude/', 'prompts/', 'README.md'],
   },
 });
