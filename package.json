@@ -19,7 +19,8 @@
     "lint": "vp lint && vp fmt --check",
     "format": "vp fmt",
     "typecheck": "tsc -p .",
-    "test": "vp test run"
+    "test": "vp test run",
+    "docs": "RALPH_WRITE_DOCS=1 vp test run src/docs.test.ts"
   },
   "dependencies": {
     "zod": "^4.6.7"

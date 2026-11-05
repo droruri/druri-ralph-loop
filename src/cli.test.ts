@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, test } from 'vite-plus/test';
 import { main } from './cli.ts';
 import { saveConfig } from './config.ts';
+import { renderExplain } from './docs.ts';
 import { fakeGh } from './gh.fake.ts';
 
 let root = '';
@@ -54,6 +55,15 @@ describe('ralph', () => {
   test('--help prints usage and exits 0', async () => {
     expect(await ralph('--help')).toBe(0);
     expect(out.join('\n')).toContain('ralph init [--yes]');
+  });
+
+  test('explain and --help print the explanation', async () => {
+    expect(await ralph('explain')).toBe(0);
+    expect(out).toEqual([renderExplain()]);
+    out.length = 0;
+    expect(await ralph('--help')).toBe(0);
+    expect(out).toEqual([renderExplain()]);
+    expect(await ralph('explain', 'extra')).toBe(2);
   });
 
   test.each([
