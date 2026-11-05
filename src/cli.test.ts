@@ -62,9 +62,31 @@ describe('ralph', () => {
     [['progress', 'pull']],
     [['merge']],
     [['merge', '7', '8']],
+    [['prompt', 'deploy', '7']],
+    [['prompt', 'build', 'x']],
+    [['prompt', 'build', '7.5']],
+    [['prompt', 'build']],
   ])('%j is a usage error', async (argv) => {
     await saveConfig(root, { repo: 'acme/app' });
     expect(await ralph(...argv)).toBe(2);
+  });
+
+  test('prompt prints the phase prompt for the issue', async () => {
+    await saveConfig(root, { repo: 'acme/app' });
+    gh = fakeGh({
+      'GET repos/acme/app/issues/7': {
+        number: 7,
+        title: 'Add login',
+        body: 'Body text',
+        state: 'open',
+        labels: [],
+      },
+    });
+    expect(await ralph('prompt', 'review', '7')).toBe(0);
+    const text = out.join('\n');
+    expect(text).toContain('Execute PHASE review');
+    expect(text).toContain('8. **Code Review Phase**');
+    expect(text).toMatch(/ISSUE TITLE: Add login\n\nISSUE DETAILS & CHECKLIST:\nBody text/);
   });
 
   test('progress pull writes the file in the current directory', async () => {

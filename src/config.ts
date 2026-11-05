@@ -15,6 +15,9 @@ export const SCHEMA_REF = './config.schema.json';
 // Unset means that step runs inline in the phase session.
 const agentType = z.string().min(1);
 
+export const Phase = z.enum(['build', 'review', 'merge']);
+export type Phase = z.output<typeof Phase>;
+
 export const ConfigSchema = z.strictObject({
   $schema: z.string().optional(),
   repo: z.string().regex(/^[\w.-]+\/[\w.-]+$/, 'expected owner/name'),
@@ -36,10 +39,7 @@ export const ConfigSchema = z.strictObject({
       escalation: z.boolean().default(true),
     })
     .prefault({}),
-  phases: z
-    .array(z.enum(['build', 'review', 'merge']))
-    .min(1)
-    .default(['build', 'review', 'merge']),
+  phases: z.array(Phase).min(1).default(['build', 'review', 'merge']),
   smallDiffLines: z.int().positive().default(150),
   commands: z
     .strictObject({
@@ -48,7 +48,8 @@ export const ConfigSchema = z.strictObject({
       // Lint + typecheck + related tests.
       check: z.string().default(''),
       // Paths left out of the diff size.
-      diffExclude: z.array(z.string()).default([]),
+      // Each becomes a quoted `':!path'` pathspec in the prompts, so no quotes or newlines.
+      diffExclude: z.array(z.string().regex(/^[^'\n]+$/, 'no quotes or newlines')).default([]),
     })
     .prefault({}),
   specDoc: z.string().min(1).optional(),

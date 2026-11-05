@@ -2,10 +2,19 @@
 import { homedir } from 'node:os';
 import { createInterface } from 'node:readline/promises';
 import { parseArgs } from 'node:util';
-import { ConfigError, findRoot, getConfigValue, loadConfig, setConfigValue } from './config.ts';
+import {
+  type Config,
+  ConfigError,
+  findRoot,
+  getConfigValue,
+  loadConfig,
+  Phase,
+  setConfigValue,
+} from './config.ts';
 import { doctor } from './doctor.ts';
 import { createTracker, type Gh, GhError, ghCli } from './github.ts';
 import { init } from './init.ts';
+import { renderPrompt } from './prompt.ts';
 
 const USAGE = `Usage: ralph <command>
 
@@ -15,7 +24,9 @@ const USAGE = `Usage: ralph <command>
   ralph doctor                     Check that this project is ready to run the loop
   ralph progress pull|push <N>     Sync logs/issue-<N>.progress.md with the issue's progress comment
   ralph merge <N>                  Wait for CI on issue N's PR, merge it, close the issue
-                                   (exit 0 merged, 1 the merge phase needs Claude)`;
+                                   (exit 0 merged, 1 the merge phase needs Claude)
+  ralph prompt build|review|merge <N>
+                                   Print the prompt for one phase of issue N`;
 
 export interface Io {
   cwd: string;
@@ -93,6 +104,18 @@ async function dispatch(argv: string[], io: Io): Promise<number> {
       const n = issueNumber(args[0]);
       return (await (await trackerFor(io)).merge(n)) ? 0 : 1;
     }
+    case 'prompt': {
+      expectArgs(args, 2);
+      const phase = Phase.safeParse(args[0]);
+      if (!phase.success)
+        throw new UsageError(`expected a phase (build|review|merge), got: ${args[0] ?? ''}`);
+      const n = issueNumber(args[1]);
+      const root = await findRoot(io.cwd);
+      const config = await loadConfig(root);
+      const issue = await (await trackerFor(io, config)).getIssue(n);
+      io.out(await renderPrompt(phase.data, issue, config, root));
+      return 0;
+    }
     default:
       throw new UsageError(`unknown command: ${command}`);
   }
@@ -122,8 +145,8 @@ function issueNumber(text: string | undefined): number {
   return Number(text);
 }
 
-async function trackerFor(io: Io) {
-  const config = await loadConfig(await findRoot(io.cwd));
+async function trackerFor(io: Io, loaded?: Config) {
+  const config = loaded ?? (await loadConfig(await findRoot(io.cwd)));
   return createTracker(config, io.gh ?? ghCli(), io.out);
 }
 
