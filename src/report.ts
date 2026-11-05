@@ -34,8 +34,17 @@ const SECRET_KEY = /token|secret|passw|auth|credential|api[-_]?key|private/i;
 const SECRET_VALUE =
   /(?:ghp_|gho_|ghu_|ghs_|ghr_|github_pat_|sk-|xox[abp]-)\S+|(?=[\w-]*\d)[\w-]{32,}/g;
 
+/** `NAME=value` where NAME names a secret, e.g. `NPM_TOKEN=abc`. */
+const SECRET_ASSIGNMENT = /\b(\w*(?:TOKEN|SECRET|PASS\w*|API_?KEY|AUTH)\w*)=\S+/gi;
+/** Credentials in a URL: `scheme://user:pass@`. */
+const URL_USERINFO = /(\w+:\/\/)[^\s/@]+@/g;
+
 /** Replaces token-looking substrings of `text`. */
-export const redactText = (text: string) => text.replace(SECRET_VALUE, REDACTED);
+export const redactText = (text: string) =>
+  text
+    .replace(SECRET_ASSIGNMENT, `$1=${REDACTED}`)
+    .replace(URL_USERINFO, `$1${REDACTED}@`)
+    .replace(SECRET_VALUE, REDACTED);
 
 /** A copy of `value` with `repo`, secret-named keys and token-looking strings redacted. */
 export function redact(value: unknown, key = ''): unknown {
@@ -118,7 +127,7 @@ async function cliVersion(): Promise<string> {
 
 async function claudeVersion(): Promise<string> {
   try {
-    const { stdout } = await promisify(execFile)('claude', ['--version']);
+    const { stdout } = await promisify(execFile)('claude', ['--version'], { timeout: 10_000 });
     return stdout.trim();
   } catch {
     return 'not found';
@@ -152,7 +161,9 @@ async function logSection(root: string): Promise<string> {
   if (newest === undefined) return `(no log in ${LOGS})`;
   const text = await readFile(join(dir, newest.name), 'utf8');
   const tail = text.replace(/\n$/, '').split('\n').slice(-LOG_LINES).join('\n').slice(-LOG_CHARS);
-  return `### Log (${newest.name}, last ${LOG_LINES} lines)\n\n\`\`\`text\n${redactText(tail)}\n\`\`\``;
+  // A fence longer than any backtick run in the log, so the log cannot close it.
+  const fence = '`'.repeat(Math.max(3, ...[...tail.matchAll(/`+/g)].map((m) => m[0].length + 1)));
+  return `### Log (${newest.name}, last ${LOG_LINES} lines)\n\n${fence}text\n${redactText(tail)}\n${fence}`;
 }
 
 /** Runs a `gh` call, turning an authentication failure into a hint to run `gh auth login`. */
@@ -161,7 +172,7 @@ async function authed(call: () => Promise<string>): Promise<string> {
     return await call();
   } catch (error) {
     const text = error instanceof Error ? error.message : String(error);
-    if (/401|bad credentials|auth login|not logged in|authenticat/i.test(text)) {
+    if (/HTTP 401|bad credentials|gh auth login|not logged in/i.test(text)) {
       throw new GhError('gh is not authenticated; run `gh auth login` and try again', {
         cause: error,
       });

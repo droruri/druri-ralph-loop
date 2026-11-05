@@ -72,6 +72,9 @@ async function dispatch(argv: string[], io: Io): Promise<number> {
     io.out(USAGE);
     return 2;
   }
+  if (values['attach-log'] === true && command !== 'report') {
+    throw new UsageError('--attach-log is only for `ralph report`');
+  }
 
   switch (command) {
     case 'init':

@@ -50,6 +50,7 @@ describe('ralph', () => {
     expect(await ralph('config', 'set', 'repo')).toBe(2);
     expect(await ralph('init', '--bogus')).toBe(2);
     expect(await ralph('report', 'extra')).toBe(2);
+    expect(await ralph('doctor', '--attach-log')).toBe(2);
     expect(err.join('\n')).toContain('Usage: ralph');
   });
 

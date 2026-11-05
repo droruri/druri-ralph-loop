@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'vite-plus/test';
 import { saveConfig } from './config.ts';
 import { fakeGh } from './gh.fake.ts';
 import { GhError } from './github.ts';
-import { redact, report } from './report.ts';
+import { redact, redactText, report } from './report.ts';
 
 let root = '';
 let gh = fakeGh();
@@ -102,6 +102,15 @@ describe('report', () => {
     expect(body).not.toContain('OLD-LOG');
   });
 
+  test('--attach-log redacts the log and keeps it inside its fence', async () => {
+    await mkdir(join(root, '.ralph/logs'));
+    await writeFile(join(root, '.ralph/logs/run.log'), 'DB_PASSWORD=hunter2\n```\n@someone\n');
+    await run(['t', 'd', 'y'], true);
+    const body = sentBody();
+    expect(body).not.toContain('hunter2');
+    expect(body).toContain('````text\nDB_PASSWORD=[redacted]\n```\n@someone\n````');
+  });
+
   test('--attach-log without logs says so', async () => {
     await run(['t', 'd', 'y'], true);
     expect(sentBody()).toContain('(no log in .ralph/logs)');
@@ -114,7 +123,7 @@ describe('report', () => {
   });
 
   test('unauthenticated gh says to run gh auth login and asks nothing', async () => {
-    gh.on('GET user', new Error('HTTP 401: Bad credentials'));
+    gh.on('GET user', new Error('To get started with GitHub CLI, please run:  gh auth login'));
     await expect(run(['t', 'd', 'y'])).rejects.toThrow(GhError);
     await expect(run(['t', 'd', 'y'])).rejects.toThrow(/gh auth login/);
     expect(gh.writes()).toEqual([]);
@@ -123,6 +132,12 @@ describe('report', () => {
 });
 
 describe('redact', () => {
+  test('hides secret assignments and URL credentials in text', () => {
+    expect(redactText('NPM_TOKEN=abc npm ci; curl https://me:pw@host/x; ok=1')).toBe(
+      'NPM_TOKEN=[redacted] npm ci; curl https://[redacted]@host/x; ok=1',
+    );
+  });
+
   test('hides repo, secret-named keys and token-looking values; keeps the rest', () => {
     const raw = {
       repo: 'acme/app',
