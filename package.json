@@ -1,6 +1,6 @@
 {
   "name": "druri-ralph-loop",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "ralph: run the ralph issue loop (build, review, merge with Claude Code) in any GitHub project",
   "type": "module",
   "packageManager": "pnpm@10.34.5",

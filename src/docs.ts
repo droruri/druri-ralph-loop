@@ -162,8 +162,8 @@ const SECTIONS: Section[] = [
     title: 'Install',
     lines: [
       'Needs Node 22.18+, 24.11+ or 26+, git, the GitHub CLI (gh, logged in) and Claude Code (claude, logged in).',
-      '- Build a package: clone droruri/druri-ralph-loop, then `pnpm install && pnpm build && npm pack`.',
-      '- Install it: `npm i -g ./druri-ralph-loop-<version>.tgz`.',
+      '- Install the release: `npm i -g https://github.com/droruri/druri-ralph-loop/releases/download/v0.1.0/druri-ralph-loop-0.1.0.tgz`.',
+      '- Or build a package yourself: clone droruri/druri-ralph-loop, run `pnpm install && pnpm build && npm pack`, then `npm i -g ./druri-ralph-loop-<version>.tgz`.',
       '- In your project: `ralph init`, then `ralph doctor`.',
     ],
   },
