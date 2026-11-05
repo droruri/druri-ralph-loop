@@ -2,8 +2,9 @@
 import { homedir } from 'node:os';
 import { createInterface } from 'node:readline/promises';
 import { parseArgs } from 'node:util';
-import { ConfigError, findRoot, getConfigValue, setConfigValue } from './config.ts';
+import { ConfigError, findRoot, getConfigValue, loadConfig, setConfigValue } from './config.ts';
 import { doctor } from './doctor.ts';
+import { createTracker, type Gh, GhError, ghCli } from './github.ts';
 import { init } from './init.ts';
 
 const USAGE = `Usage: ralph <command>
@@ -11,12 +12,17 @@ const USAGE = `Usage: ralph <command>
   ralph init [--yes]               Write .ralph/config.json; --yes takes every default
   ralph config get <key>           Print a setting, e.g. models.build
   ralph config set <key> <value>   Change a setting; the value is checked before it is saved
-  ralph doctor                     Check that this project is ready to run the loop`;
+  ralph doctor                     Check that this project is ready to run the loop
+  ralph progress pull|push <N>     Sync logs/issue-<N>.progress.md with the issue's progress comment
+  ralph merge <N>                  Wait for CI on issue N's PR, merge it, close the issue
+                                   (exit 0 merged, 1 the merge phase needs Claude)`;
 
 export interface Io {
   cwd: string;
   out: (line: string) => void;
   err: (line: string) => void;
+  /** Runner for `gh`; the real binary when unset. */
+  gh?: Gh;
 }
 
 class UsageError extends Error {}
@@ -30,7 +36,7 @@ export async function main(argv: string[], io: Io): Promise<number> {
       io.err(`ralph: ${error.message}\n\n${USAGE}`);
       return 2;
     }
-    if (error instanceof ConfigError) {
+    if (error instanceof ConfigError || error instanceof GhError) {
       io.err(`ralph: ${error.message}`);
       return 1;
     }
@@ -71,6 +77,22 @@ async function dispatch(argv: string[], io: Io): Promise<number> {
       const ok = await doctor({ root, home: homedir(), env: process.env, log: io.out });
       return ok ? 0 : 1;
     }
+    case 'progress': {
+      const [action, issue] = args;
+      expectArgs(args, 2);
+      if (action !== 'pull' && action !== 'push') {
+        throw new UsageError('expected `progress pull <N>` or `progress push <N>`');
+      }
+      const n = issueNumber(issue);
+      const tracker = await trackerFor(io);
+      await (action === 'pull' ? tracker.progressPull(n, io.cwd) : tracker.progressPush(n, io.cwd));
+      return 0;
+    }
+    case 'merge': {
+      expectArgs(args, 1);
+      const n = issueNumber(args[0]);
+      return (await (await trackerFor(io)).merge(n)) ? 0 : 1;
+    }
     default:
       throw new UsageError(`unknown command: ${command}`);
   }
@@ -91,6 +113,18 @@ async function configCommand(args: string[], io: Io): Promise<number> {
     return 0;
   }
   throw new UsageError('expected `config get <key>` or `config set <key> <value>`');
+}
+
+function issueNumber(text: string | undefined): number {
+  if (text === undefined || !/^\d+$/.test(text)) {
+    throw new UsageError(`expected an issue number, got: ${text ?? ''}`);
+  }
+  return Number(text);
+}
+
+async function trackerFor(io: Io) {
+  const config = await loadConfig(await findRoot(io.cwd));
+  return createTracker(config, io.gh ?? ghCli(), io.out);
 }
 
 function expectArgs(args: string[], count: number): void {
