@@ -49,6 +49,7 @@ describe('ralph', () => {
     expect(await ralph('nope')).toBe(2);
     expect(await ralph('config', 'set', 'repo')).toBe(2);
     expect(await ralph('init', '--bogus')).toBe(2);
+    expect(await ralph('report', 'extra')).toBe(2);
     expect(err.join('\n')).toContain('Usage: ralph');
   });
 

@@ -16,6 +16,7 @@ import { renderExplain, usage } from './docs.ts';
 import { createTracker, type Gh, GhError, ghCli } from './github.ts';
 import { init } from './init.ts';
 import { renderPrompt } from './prompt.ts';
+import { report } from './report.ts';
 
 const USAGE = usage();
 
@@ -52,7 +53,11 @@ async function dispatch(argv: string[], io: Io): Promise<number> {
     parsed = parseArgs({
       args: argv,
       allowPositionals: true,
-      options: { yes: { type: 'boolean', short: 'y' }, help: { type: 'boolean', short: 'h' } },
+      options: {
+        yes: { type: 'boolean', short: 'y' },
+        help: { type: 'boolean', short: 'h' },
+        'attach-log': { type: 'boolean' },
+      },
     });
   } catch (error) {
     throw new UsageError(error instanceof Error ? error.message : String(error), { cause: error });
@@ -114,6 +119,16 @@ async function dispatch(argv: string[], io: Io): Promise<number> {
       const issue = await (await trackerFor(io, config)).getIssue(n);
       io.out(await renderPrompt(phase.data, issue, config, root));
       return 0;
+    }
+    case 'report': {
+      expectArgs(args, 0);
+      const root = await findRoot(io.cwd);
+      const gh = io.gh ?? ghCli();
+      let ok = false;
+      await withPrompter(async (ask) => {
+        ok = await report({ root, attachLog: values['attach-log'] === true, gh, ask, log: io.out });
+      });
+      return ok ? 0 : 1;
     }
     default:
       throw new UsageError(`unknown command: ${command}`);
