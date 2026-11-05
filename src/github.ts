@@ -256,6 +256,23 @@ export function createTracker(
       return hasLabel(await getIssue(n), labels.lock);
     },
 
+    /** Creates the lock label if the repo lacks it; never throws (it may already exist). */
+    async ensureLockLabel(): Promise<void> {
+      try {
+        await call([
+          `${repo}/labels`,
+          '-f',
+          `name=${labels.lock}`,
+          '-f',
+          'color=FBCA04',
+          '-f',
+          'description=A ralph run is working on this issue',
+        ]);
+      } catch {
+        // Already there (HTTP 422), or no permission: lock() reports a real problem.
+      }
+    },
+
     async lock(n: number): Promise<void> {
       await call([`${repo}/issues/${n}/labels`, '-f', `labels[]=${labels.lock}`]);
     },

@@ -21,10 +21,9 @@ export const COMMANDS: CommandDoc[] = [
   },
   {
     name: 'run',
-    planned: true,
     usage: 'ralph run [N] [--model <model>]',
     summary:
-      'Run the loop: every ready issue in turn, or only issue N; --model (e.g. opus) overrides the phase models',
+      'Run the loop: every ready issue in turn, or only issue N; --model (e.g. opus) overrides models.build for this run',
   },
   {
     name: 'config',
@@ -103,7 +102,7 @@ export const CONFIG_DOCS: Record<string, ConfigDoc> = {
   'models.review': { doc: 'Claude model for the review phase.' },
   'models.merge': { doc: 'Claude model for the merge phase.' },
   'models.escalation': {
-    doc: 'One more pass on opus when an issue is still open after all phases.',
+    doc: 'One more pass on opus when an issue is still open after all phases (not when build already ran on opus).',
   },
   phases: { doc: 'The phases each issue runs, in order.' },
   smallDiffLines: {
@@ -136,11 +135,11 @@ export const CONFIG_DOCS: Record<string, ConfigDoc> = {
   },
   'skills.plan': { doc: 'Skill used to write the plan. Unset: a plain plan.' },
   plugins: {
-    doc: 'Extra Claude Code plugins; the ones the agent types and skills need are added on top.',
+    doc: 'Extra Claude Code plugins (name or name@marketplace); the plugins of plugin:name agent types and skills are added on top. A run enables only these.',
   },
   'merge.method': { doc: 'How the PR is merged: squash, merge or rebase.' },
   'merge.auto': {
-    doc: 'Merge the PR once CI is green. false: stop at a green PR for you to merge.',
+    doc: 'Not read yet: `ralph run` always merges a green PR (false is reserved for stopping at a green PR).',
   },
 };
 
@@ -168,7 +167,8 @@ const SECTIONS: Section[] = [
     lines: [
       '- `ralph run`: work through the whole queue, oldest ready issue first.',
       '- `ralph run <N>`: run only issue N.',
-      '- `ralph run --model opus`: use opus for every phase of this run.',
+      '- `ralph run --model opus`: build on opus for this run (review and merge keep their models).',
+      '- Ctrl-C stops the run and removes the lock label. An issue still open after all phases stops the run and keeps its worktree; logs and the cost ledger (ralph-costs.tsv) are in .ralph/logs/.',
       '- `/ralph-issue <N>` inside a Claude Code session: run issue N in that session. `ralph init` writes the skill.',
     ],
   },
