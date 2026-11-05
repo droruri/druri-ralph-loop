@@ -15,7 +15,8 @@ Needs Node 22.18+, 24.11+ or 26+, git, the GitHub CLI (gh, logged in) and Claude
 
 - `ralph run`: work through the whole queue, oldest ready issue first.
 - `ralph run <N>`: run only issue N.
-- `ralph run --model opus`: use opus for every phase of this run.
+- `ralph run --model opus`: build on opus for this run (review and merge keep their models).
+- Ctrl-C stops the run and removes the lock label. An issue still open after all phases stops the run and keeps its worktree; logs and the cost ledger (ralph-costs.tsv) are in .ralph/logs/.
 - `/ralph-issue <N>` inside a Claude Code session: run issue N in that session. `ralph init` writes the skill.
 
 ## Phases
@@ -41,7 +42,7 @@ The issue body is the spec and the scope.
 ## Commands
 
 - `ralph init [--yes]`: Write .ralph/config.json, .ralph/README.md and the .gitignore lines; --yes takes every default
-- `ralph run [N] [--model <model>]`: Run the loop: every ready issue in turn, or only issue N; --model (e.g. opus) overrides the phase models
+- `ralph run [N] [--model <model>]`: Run the loop: every ready issue in turn, or only issue N; --model (e.g. opus) overrides models.build for this run
 - `ralph config get <key>`: Print a setting, e.g. models.build
 - `ralph config set <key> <value>`: Change a setting; the value is checked before it is saved
 - `ralph doctor`: Check that this project is ready to run the loop
@@ -64,7 +65,7 @@ Settings live in .ralph/config.json. Change them with `ralph config set <key> <v
 - `models.build` (default "sonnet"): Claude model for the build phase.
 - `models.review` (default "haiku"): Claude model for the review phase.
 - `models.merge` (default "haiku"): Claude model for the merge phase.
-- `models.escalation` (default true): One more pass on opus when an issue is still open after all phases.
+- `models.escalation` (default true): One more pass on opus when an issue is still open after all phases (not when build already ran on opus).
 - `phases` (default ["build","review","merge"]): The phases each issue runs, in order.
 - `smallDiffLines` (default 150): A diff under this many changed lines gets one reviewer; a larger one gets the parallel reviewers.
 - `commands.install` (default ""): Runs in each new worktree, e.g. pnpm install --frozen-lockfile. Detected from the lockfile.
@@ -78,6 +79,6 @@ Settings live in .ralph/config.json. Change them with `ralph config set <key> <v
 - `subagents.browserCheck` (unset): Agent type that checks browser criteria. Unset: the phase checks them itself if its tools allow, else splits them to needs-human.
 - `skills.tdd` (unset): Skill the build phase uses to write tests first. Unset: plain red, green, refactor.
 - `skills.plan` (unset): Skill used to write the plan. Unset: a plain plan.
-- `plugins` (default []): Extra Claude Code plugins; the ones the agent types and skills need are added on top.
+- `plugins` (default []): Extra Claude Code plugins (name or name@marketplace); the plugins of plugin:name agent types and skills are added on top. A run enables only these.
 - `merge.method` (default "squash"): How the PR is merged: squash, merge or rebase.
-- `merge.auto` (default true): Merge the PR once CI is green. false: stop at a green PR for you to merge.
+- `merge.auto` (default true): Not read yet: `ralph run` always merges a green PR (false is reserved for stopping at a green PR).

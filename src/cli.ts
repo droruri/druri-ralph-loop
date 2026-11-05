@@ -15,8 +15,10 @@ import { doctor } from './doctor.ts';
 import { renderExplain, usage } from './docs.ts';
 import { createTracker, type Gh, GhError, ghCli } from './github.ts';
 import { init } from './init.ts';
+import { run } from './loop.ts';
 import { renderPrompt } from './prompt.ts';
 import { report } from './report.ts';
+import { WorktreeError } from './worktree.ts';
 
 const USAGE = usage();
 
@@ -39,7 +41,11 @@ export async function main(argv: string[], io: Io): Promise<number> {
       io.err(`ralph: ${error.message}\n\n${USAGE}`);
       return 2;
     }
-    if (error instanceof ConfigError || error instanceof GhError) {
+    if (
+      error instanceof ConfigError ||
+      error instanceof GhError ||
+      error instanceof WorktreeError
+    ) {
       io.err(`ralph: ${error.message}`);
       return 1;
     }
@@ -57,6 +63,7 @@ async function dispatch(argv: string[], io: Io): Promise<number> {
         yes: { type: 'boolean', short: 'y' },
         help: { type: 'boolean', short: 'h' },
         'attach-log': { type: 'boolean' },
+        model: { type: 'string' },
       },
     });
   } catch (error) {
@@ -75,6 +82,9 @@ async function dispatch(argv: string[], io: Io): Promise<number> {
   if (values['attach-log'] === true && command !== 'report') {
     throw new UsageError('--attach-log is only for `ralph report`');
   }
+  if (values.model !== undefined && command !== 'run') {
+    throw new UsageError('--model is only for `ralph run`');
+  }
 
   switch (command) {
     case 'init':
@@ -83,6 +93,12 @@ async function dispatch(argv: string[], io: Io): Promise<number> {
         init({ cwd: io.cwd, yes: values.yes === true, ask, log: io.out }),
       );
       return 0;
+    case 'run': {
+      if (args.length > 1) throw new UsageError(`unexpected argument: ${args[1] ?? ''}`);
+      const issue = args[0] === undefined ? undefined : issueNumber(args[0]);
+      if (values.model === '') throw new UsageError('--model needs a model name');
+      return runCommand(io, issue, values.model);
+    }
     case 'config':
       return configCommand(args, io);
     case 'explain':
@@ -135,6 +151,31 @@ async function dispatch(argv: string[], io: Io): Promise<number> {
     }
     default:
       throw new UsageError(`unknown command: ${command}`);
+  }
+}
+
+/** `ralph run`: Ctrl-C (or SIGTERM) stops claude, removes the lock label and exits 130. */
+async function runCommand(io: Io, issue: number | undefined, model: string | undefined) {
+  const root = await findRoot(io.cwd);
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  process.once('SIGINT', abort);
+  process.once('SIGTERM', abort);
+  try {
+    return await run({
+      root,
+      issue,
+      model,
+      gh: io.gh,
+      env: process.env,
+      home: homedir(),
+      log: io.out,
+      err: io.err,
+      signal: controller.signal,
+    });
+  } finally {
+    process.off('SIGINT', abort);
+    process.off('SIGTERM', abort);
   }
 }
 

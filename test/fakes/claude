@@ -1,8 +1,37 @@
 #!/bin/sh
 # Fake `claude` for tests. Never calls a model.
+#
+# `claude --print ...` is one phase run. Run k (1, 2, ...) of a test:
+#   - appends "<model> <phase> key=<ANTHROPIC_API_KEY or unset> ci=<CI>" to $FAKE_CLAUDE_DIR/calls
+#   - writes its arguments, one per line, to $FAKE_CLAUDE_DIR/<k>.args
+#   - runs $FAKE_CLAUDE_DIR/<k>.sh in the working directory (side effects), if it exists
+#   - prints $FAKE_CLAUDE_DIR/<k>.jsonl (the stream-json fixture), else one result event
 if [ "$1" = --version ]; then
   echo "9.9.9 (Claude Code)"
   exit 0
 fi
+for arg in "$@"; do
+  if [ "$arg" = --print ]; then
+    dir=${FAKE_CLAUDE_DIR:?FAKE_CLAUDE_DIR is not set}
+    k=$(($(cat "$dir/count" 2>/dev/null || echo 0) + 1))
+    echo "$k" > "$dir/count"
+    model=
+    prev=
+    for a in "$@"; do
+      [ "$prev" = --model ] && model=$a
+      prev=$a
+      printf '%s\n' "$a" >> "$dir/$k.args"
+    done
+    phase=$(printf '%s\n' "$prev" | sed -n 's/^Execute PHASE \([a-z]*\).*/\1/p' | head -1)
+    echo "$model $phase key=${ANTHROPIC_API_KEY:-unset} ci=${CI:-unset}" >> "$dir/calls"
+    [ -f "$dir/$k.sh" ] && sh "$dir/$k.sh"
+    if [ -f "$dir/$k.jsonl" ]; then
+      cat "$dir/$k.jsonl"
+    else
+      echo '{"type":"result","num_turns":1,"total_cost_usd":0.01,"duration_ms":1000,"is_error":false}'
+    fi
+    exit 0
+  fi
+done
 echo "fake claude: unsupported command: $*" >&2
 exit 1

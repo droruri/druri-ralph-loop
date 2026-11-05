@@ -79,6 +79,9 @@ export interface MergeOptions {
   sleep?: (ms: number) => Promise<void>;
 }
 
+/** The progress file of issue `n` in a worktree (or any checkout) `cwd`. */
+export const progressFile = (cwd: string, n: number) => join(cwd, 'logs', `issue-${n}.progress.md`);
+
 /** The branch the loop works on for issue `n`. */
 export const branchName = (n: number) => `feature/issue-${n}`;
 
@@ -169,8 +172,6 @@ export function createTracker(
     return comments.find((c) => (c.body ?? '').startsWith(PROGRESS_MARKER))?.id;
   }
 
-  const progressFile = (cwd: string, n: number) => join(cwd, 'logs', `issue-${n}.progress.md`);
-
   /** Check runs and legacy commit statuses of a commit. */
   async function ciChecks(sha: string) {
     const runs = (
@@ -254,6 +255,23 @@ export function createTracker(
 
     async isLocked(n: number): Promise<boolean> {
       return hasLabel(await getIssue(n), labels.lock);
+    },
+
+    /** Creates the lock label if the repo lacks it; never throws (it may already exist). */
+    async ensureLockLabel(): Promise<void> {
+      try {
+        await call([
+          `${repo}/labels`,
+          '-f',
+          `name=${labels.lock}`,
+          '-f',
+          'color=FBCA04',
+          '-f',
+          'description=A ralph run is working on this issue',
+        ]);
+      } catch {
+        // Already there (HTTP 422), or no permission: lock() reports a real problem.
+      }
     },
 
     async lock(n: number): Promise<void> {

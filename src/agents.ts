@@ -3,6 +3,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
+import type { Config } from './config.ts';
 import { exists, isNotFound } from './fs.ts';
 
 const BUILT_IN = new Set([
@@ -90,4 +91,37 @@ export async function missingAgentTypes(
     missing.push(type);
   }
   return missing;
+}
+
+/**
+ * Plugin ids (`name@marketplace`) a run enables: the plugins of the configured `plugin:name` agent
+ * types and skills, plus `config.plugins`. A bare plugin name resolves through the user's installed
+ * plugins; one that is not installed is returned in `missing`.
+ */
+export async function pluginIds(
+  config: Pick<Config, 'subagents' | 'skills' | 'plugins'>,
+  home: string,
+): Promise<{ ids: string[]; missing: string[] }> {
+  const { investigator, planner, reviewer, browserCheck } = config.subagents;
+  const roles = [investigator, planner, reviewer?.type, browserCheck];
+  const qualified = [...roles, config.skills.tdd, config.skills.plan].flatMap((name) =>
+    name?.includes(':') ? [name.slice(0, name.indexOf(':'))] : [],
+  );
+  const installed = await readJson(
+    join(home, '.claude/plugins/installed_plugins.json'),
+    InstalledPluginsSchema,
+  );
+  const known = Object.keys(installed?.plugins ?? {});
+  const ids = new Set<string>();
+  const missing: string[] = [];
+  for (const name of [...qualified, ...config.plugins]) {
+    if (name.includes('@')) {
+      ids.add(name);
+      continue;
+    }
+    const id = known.find((k) => k.split('@')[0] === name);
+    if (id === undefined) missing.push(name);
+    else ids.add(id);
+  }
+  return { ids: [...ids].sort(), missing: [...new Set(missing)] };
 }
