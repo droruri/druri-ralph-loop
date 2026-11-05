@@ -116,7 +116,8 @@ async function buildBody(description: string, options: ReportOptions): Promise<s
   return sections.join('\n\n');
 }
 
-async function cliVersion(): Promise<string> {
+/** This package's version, or "unknown" when package.json cannot be read. */
+export async function cliVersion(): Promise<string> {
   try {
     const parsed = PackageJson.safeParse(JSON.parse(await readFile(PACKAGE_JSON, 'utf8')));
     return parsed.success ? parsed.data.version : 'unknown';

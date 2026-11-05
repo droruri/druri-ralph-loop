@@ -2,8 +2,10 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, test } from 'vite-plus/test';
+import { git, gitRepo } from './git.fake.ts';
 import {
   configJsonSchema,
+  findRoot,
   getConfigValue,
   parseConfig,
   saveConfig,
@@ -123,5 +125,23 @@ describe('configJsonSchema', () => {
     const schema = configJsonSchema();
     expect(schema['required']).toEqual(['repo']);
     expect(JSON.stringify(schema['properties'])).toContain('"pickLabel"');
+  });
+});
+
+describe('findRoot', () => {
+  let dir = '';
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'ralph-root-'));
+  });
+  afterEach(() => rm(dir, { recursive: true, force: true }));
+
+  test("is the checkout's top level, or the main checkout when a worktree's main checkout has a config", async () => {
+    const app = await gitRepo(dir);
+    git(app, 'worktree', 'add', '--quiet', '-b', 'feature/issue-3', join(app, '.ralph/wt/issue-3'));
+    const wt = join(app, '.ralph/wt/issue-3');
+    expect(await findRoot(join(app, '.ralph'))).toBe(app);
+    expect(await findRoot(wt)).toBe(wt);
+    await saveConfig(app, { repo: 'acme/app' });
+    expect(await findRoot(wt)).toBe(app);
   });
 });

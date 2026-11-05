@@ -12,7 +12,8 @@
   },
   "files": [
     "dist",
-    "prompts"
+    "prompts",
+    "templates"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

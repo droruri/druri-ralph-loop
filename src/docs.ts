@@ -17,7 +17,7 @@ export const COMMANDS: CommandDoc[] = [
     name: 'init',
     usage: 'ralph init [--yes]',
     summary:
-      'Write .ralph/config.json, .ralph/README.md and the .gitignore lines; --yes takes every default',
+      'Write .ralph/config.json, .ralph/README.md, the /ralph-issue skill and the .gitignore lines; --yes takes every default',
   },
   {
     name: 'run',
@@ -53,16 +53,21 @@ export const COMMANDS: CommandDoc[] = [
   },
   {
     name: 'upgrade',
-    planned: true,
-    usage: 'ralph upgrade',
+    usage: 'ralph upgrade [--yes]',
     summary:
-      'Rewrite the files ralph owns in this project (the /ralph-issue skill, .ralph/README.md)',
+      'Rewrite the files ralph owns in this project (the /ralph-issue skill, .ralph/README.md) and print the old and new versions; asks before replacing a hand-edited skill (--yes replaces it)',
   },
   {
     name: 'progress',
     usage: 'ralph progress pull|push <N>',
     summary:
       "Sync logs/issue-<N>.progress.md with the issue's progress comment (used by the prompts)",
+  },
+  {
+    name: 'worktree',
+    usage: 'ralph worktree create|remove <N>',
+    summary:
+      "Create issue N's worktree under .ralph/wt/ (running commands.install) and print its path, or remove it (used by the skill)",
   },
   {
     name: 'merge',
@@ -169,7 +174,7 @@ const SECTIONS: Section[] = [
       '- `ralph run <N>`: run only issue N.',
       '- `ralph run --model opus`: build on opus for this run (review and merge keep their models).',
       '- Ctrl-C stops the run and removes the lock label. An issue still open after all phases stops the run and keeps its worktree; logs and the cost ledger (ralph-costs.tsv) are in .ralph/logs/.',
-      '- `/ralph-issue <N>` inside a Claude Code session: run issue N in that session. `ralph init` writes the skill.',
+      '- `/ralph-issue <N> [interactive] [build|review|merge] [--model <model>]` inside a Claude Code session: run issue N in that session, each phase as a subagent. `ralph init` writes the skill to .claude/skills/ralph-issue/ and `ralph upgrade` rewrites it; it reads models and labels from the config each time it runs.',
     ],
   },
   {
@@ -272,6 +277,7 @@ export function renderProjectReadme(): string {
     '',
     '- config.json: the settings; change them with `ralph config set <key> <value>`.',
     '- prompts/<phase>.extra.md: optional text added to a phase prompt.',
+    '- ../.claude/skills/ralph-issue/SKILL.md: the /ralph-issue skill; `ralph upgrade` rewrites it.',
     '- wt/ and logs/: worktrees and logs of runs (gitignored).',
     '',
     'Run `ralph explain` for the commands, phases, labels, issue format and every setting.',
