@@ -6,7 +6,7 @@ ralph runs the ralph issue loop in any GitHub project: it picks ready issues and
 
 ## Install
 
-Needs Node 22.18 or later, git, the GitHub CLI (gh, logged in) and Claude Code (claude, logged in).
+Needs Node 22.18+, 24.11+ or 26+, git, the GitHub CLI (gh, logged in) and Claude Code (claude, logged in).
 - Build a package: clone droruri/druri-ralph-loop, then `pnpm install && pnpm build && npm pack`.
 - Install it: `npm i -g ./druri-ralph-loop-<version>.tgz`.
 - In your project: `ralph init`, then `ralph doctor`.
@@ -23,14 +23,14 @@ Needs Node 22.18 or later, git, the GitHub CLI (gh, logged in) and Claude Code (
 Each issue runs in its own worktree under .ralph/wt/, one Claude session per phase. Progress lives in a comment on the issue, so a stopped run resumes. Work only a person can do is split into a new issue labeled needs-human. An issue still open after all phases gets one more pass on opus (models.escalation).
 - build: checks blockers, audits main for criteria already met, plans, writes tests first, codes, runs the checks, opens the PR. A small diff is also reviewed here.
 - review: reviews the diff for standards and spec, fixes the findings, ticks the acceptance-criteria boxes. Skipped when build already reviewed.
-- merge: `ralph merge <N>` waits for CI, merges, closes the issue and unblocks dependents. A Claude session runs only when CI is red or the merge needs a decision.
+- merge: `ralph merge <N>` waits for CI, merges, closes the issue, deletes the branch and unblocks dependents. Checks that are also red on main do not block the merge; it opens a `main is red` issue for them instead. A Claude session runs only when CI is red or the merge needs a decision.
 
 ## Labels
 
-- pick label (labels.pickLabel, default ready-for-agent): the loop takes only issues with it.
+- pick label (labels.pickLabel): the loop takes only issues with it.
 - blocked (labels.blocked): an issue under ## Blocked by is still open; `ralph merge` removes it once all are closed.
 - needs-human (labels.needsHuman): only a person can finish it; the loop skips it.
-- lock (labels.lock, default ralph:running): a run is working on the issue; removed when the run ends.
+- lock (labels.lock): a run is working on the issue; removed when the run ends.
 
 ## Issue format
 

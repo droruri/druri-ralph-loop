@@ -24,12 +24,14 @@ describe('docs', () => {
     expect(Object.keys(CONFIG_DOCS).sort()).toEqual(schemaKeys(configJsonSchema()).sort());
   });
 
-  test('every command registered in cli.ts is documented', async () => {
+  test('every command registered in cli.ts is documented, and only planned ones are not registered', async () => {
     const cli = await readFile(join(import.meta.dirname, 'cli.ts'), 'utf8');
     const registered = [...cli.matchAll(/^ {4}case '([\w-]+)':/gm)].map((m) => m[1]);
     expect(registered.length).toBeGreaterThan(0);
-    const documented = COMMANDS.map((c) => c.name);
-    for (const name of registered) expect(documented).toContain(name);
+    const built = COMMANDS.filter((c) => c.planned !== true).map((c) => c.name);
+    const planned = COMMANDS.filter((c) => c.planned === true).map((c) => c.name);
+    expect(new Set(registered)).toEqual(new Set(built));
+    for (const name of planned) expect(registered).not.toContain(name);
   });
 
   test('explain covers commands, the skill, config keys, phases and labels', () => {

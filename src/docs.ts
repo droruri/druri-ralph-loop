@@ -7,6 +7,8 @@ export interface CommandDoc {
   name: string;
   usage: string;
   summary: string;
+  /** Documented ahead of its ticket; drop the flag when cli.ts dispatches it. */
+  planned?: true;
 }
 
 /** Every command, including the ones prompts and the skill call (`progress`, `merge`, `prompt`). */
@@ -19,6 +21,7 @@ export const COMMANDS: CommandDoc[] = [
   },
   {
     name: 'run',
+    planned: true,
     usage: 'ralph run [N] [--model <model>]',
     summary:
       'Run the loop: every ready issue in turn, or only issue N; --model (e.g. opus) overrides the phase models',
@@ -45,12 +48,14 @@ export const COMMANDS: CommandDoc[] = [
   },
   {
     name: 'report',
+    planned: true,
     usage: 'ralph report [--attach-log]',
     summary:
       'Open an issue about ralph in droruri/druri-ralph-loop; shows what is sent and asks first',
   },
   {
     name: 'upgrade',
+    planned: true,
     usage: 'ralph upgrade',
     summary:
       'Rewrite the files ralph owns in this project (the /ralph-issue skill, .ralph/README.md)',
@@ -153,7 +158,7 @@ const SECTIONS: Section[] = [
   {
     title: 'Install',
     lines: [
-      'Needs Node 22.18 or later, git, the GitHub CLI (gh, logged in) and Claude Code (claude, logged in).',
+      'Needs Node 22.18+, 24.11+ or 26+, git, the GitHub CLI (gh, logged in) and Claude Code (claude, logged in).',
       '- Build a package: clone droruri/druri-ralph-loop, then `pnpm install && pnpm build && npm pack`.',
       '- Install it: `npm i -g ./druri-ralph-loop-<version>.tgz`.',
       '- In your project: `ralph init`, then `ralph doctor`.',
@@ -174,16 +179,16 @@ const SECTIONS: Section[] = [
       'Each issue runs in its own worktree under .ralph/wt/, one Claude session per phase. Progress lives in a comment on the issue, so a stopped run resumes. Work only a person can do is split into a new issue labeled needs-human. An issue still open after all phases gets one more pass on opus (models.escalation).',
       '- build: checks blockers, audits main for criteria already met, plans, writes tests first, codes, runs the checks, opens the PR. A small diff is also reviewed here.',
       '- review: reviews the diff for standards and spec, fixes the findings, ticks the acceptance-criteria boxes. Skipped when build already reviewed.',
-      '- merge: `ralph merge <N>` waits for CI, merges, closes the issue and unblocks dependents. A Claude session runs only when CI is red or the merge needs a decision.',
+      '- merge: `ralph merge <N>` waits for CI, merges, closes the issue, deletes the branch and unblocks dependents. Checks that are also red on main do not block the merge; it opens a `main is red` issue for them instead. A Claude session runs only when CI is red or the merge needs a decision.',
     ],
   },
   {
     title: 'Labels',
     lines: [
-      '- pick label (labels.pickLabel, default ready-for-agent): the loop takes only issues with it.',
+      '- pick label (labels.pickLabel): the loop takes only issues with it.',
       '- blocked (labels.blocked): an issue under ## Blocked by is still open; `ralph merge` removes it once all are closed.',
       '- needs-human (labels.needsHuman): only a person can finish it; the loop skips it.',
-      '- lock (labels.lock, default ralph:running): a run is working on the issue; removed when the run ends.',
+      '- lock (labels.lock): a run is working on the issue; removed when the run ends.',
     ],
   },
   {
@@ -211,14 +216,14 @@ function defaultText(key: string, entry: ConfigDoc): string {
 
 const pad = (text: string, width: number) => text.padEnd(width);
 
+function commandLines(): string[] {
+  const width = Math.max(...COMMANDS.map((c) => c.usage.length)) + 2;
+  return COMMANDS.map((c) => `  ${pad(c.usage, width)}${c.summary}`);
+}
+
 /** The command list `ralph` prints on a usage error. */
 export function usage(): string {
-  const width = Math.max(...COMMANDS.map((c) => c.usage.length)) + 2;
-  return [
-    'Usage: ralph <command>',
-    '',
-    ...COMMANDS.map((c) => `  ${pad(c.usage, width)}${c.summary}`),
-  ].join('\n');
+  return ['Usage: ralph <command>', '', ...commandLines()].join('\n');
 }
 
 const plain = (line: string) => line.replaceAll('`', '');
@@ -230,7 +235,7 @@ export function renderExplain(): string {
   for (const section of SECTIONS) {
     out.push(section.title.toUpperCase(), ...section.lines.map((l) => `  ${plain(l)}`), '');
   }
-  out.push('COMMANDS', ...usage().split('\n').slice(2), '');
+  out.push('COMMANDS', ...commandLines(), '');
   out.push('CONFIG', `  ${plain(CONFIG_INTRO)}`);
   for (const [key, entry] of Object.entries(CONFIG_DOCS)) {
     out.push(`  ${pad(key, keyWidth)}${defaultText(key, entry)}`, `      ${entry.doc}`);
