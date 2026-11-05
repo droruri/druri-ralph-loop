@@ -43,6 +43,13 @@ describe('parseConfig', () => {
     expect(result.errors[0]).toMatch(/^labels\.pickLabel: /);
   });
 
+  test('rejects a diffExclude path with a quote', () => {
+    const result = parseConfig({ repo: 'acme/app', commands: { diffExclude: ["it's"] } });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors[0]).toMatch(/^commands\.diffExclude\.0: /);
+  });
+
   test('names an unknown key', () => {
     const result = parseConfig({ repo: 'acme/app', models: { biuld: 'opus' } });
     expect(result.ok).toBe(false);

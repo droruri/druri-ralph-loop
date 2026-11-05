@@ -3,6 +3,7 @@ import { homedir } from 'node:os';
 import { createInterface } from 'node:readline/promises';
 import { parseArgs } from 'node:util';
 import {
+  type Config,
   ConfigError,
   findRoot,
   getConfigValue,
@@ -111,7 +112,7 @@ async function dispatch(argv: string[], io: Io): Promise<number> {
       const n = issueNumber(args[1]);
       const root = await findRoot(io.cwd);
       const config = await loadConfig(root);
-      const issue = await createTracker(config, io.gh ?? ghCli(), io.out).getIssue(n);
+      const issue = await (await trackerFor(io, config)).getIssue(n);
       io.out(await renderPrompt(phase.data, issue, config, root));
       return 0;
     }
@@ -144,8 +145,8 @@ function issueNumber(text: string | undefined): number {
   return Number(text);
 }
 
-async function trackerFor(io: Io) {
-  const config = await loadConfig(await findRoot(io.cwd));
+async function trackerFor(io: Io, loaded?: Config) {
+  const config = loaded ?? (await loadConfig(await findRoot(io.cwd)));
   return createTracker(config, io.gh ?? ghCli(), io.out);
 }
 

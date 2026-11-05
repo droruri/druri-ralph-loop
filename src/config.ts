@@ -48,7 +48,8 @@ export const ConfigSchema = z.strictObject({
       // Lint + typecheck + related tests.
       check: z.string().default(''),
       // Paths left out of the diff size.
-      diffExclude: z.array(z.string()).default([]),
+      // Each becomes a quoted `':!path'` pathspec in the prompts, so no quotes or newlines.
+      diffExclude: z.array(z.string().regex(/^[^'\n]+$/, 'no quotes or newlines')).default([]),
     })
     .prefault({}),
   specDoc: z.string().min(1).optional(),
