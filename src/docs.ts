@@ -48,7 +48,6 @@ export const COMMANDS: CommandDoc[] = [
   },
   {
     name: 'report',
-    planned: true,
     usage: 'ralph report [--attach-log]',
     summary:
       'Open an issue about ralph in droruri/druri-ralph-loop; shows what is sent and asks first',
