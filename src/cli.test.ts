@@ -5,7 +5,9 @@ import { afterEach, beforeEach, describe, expect, test } from 'vite-plus/test';
 import { main } from './cli.ts';
 import { saveConfig } from './config.ts';
 import { renderExplain } from './docs.ts';
+import { exists } from './fs.ts';
 import { fakeGh } from './gh.fake.ts';
+import { gitRepo } from './git.fake.ts';
 
 let root = '';
 const out: string[] = [];
@@ -82,6 +84,9 @@ describe('ralph', () => {
     [['prompt', 'build', 'x']],
     [['prompt', 'build', '7.5']],
     [['prompt', 'build']],
+    [['worktree', 'add', '7']],
+    [['worktree', 'create']],
+    [['upgrade', 'extra']],
   ])('%j is a usage error', async (argv) => {
     await saveConfig(root, { repo: 'acme/app' });
     expect(await ralph(...argv)).toBe(2);
@@ -151,5 +156,17 @@ describe('ralph', () => {
     gh = fakeGh({ 'GET repos/acme/app/issues/7/comments?per_page=100': { oops: true } });
     expect(await ralph('progress', 'pull', '7')).toBe(1);
     expect(err[0]).toMatch(/^ralph: unexpected response from gh api repos\/acme\/app\/issues\/7/);
+  });
+
+  test('worktree create prints the path; worktree remove deletes it', async () => {
+    const app = await gitRepo(root);
+    await saveConfig(app, { repo: 'acme/app' });
+    const cli = (...argv: string[]) =>
+      main(argv, { cwd: app, out: (l) => out.push(l), err: (l) => err.push(l), gh: gh.gh });
+    expect(await cli('worktree', 'create', '7')).toBe(0);
+    expect(out).toEqual([join(app, '.ralph/wt/issue-7')]);
+    expect(await exists(join(app, '.ralph/wt/issue-7'))).toBe(true);
+    expect(await cli('worktree', 'remove', '7')).toBe(0);
+    expect(await exists(join(app, '.ralph/wt/issue-7'))).toBe(false);
   });
 });

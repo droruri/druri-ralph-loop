@@ -17,7 +17,7 @@ Needs Node 22.18+, 24.11+ or 26+, git, the GitHub CLI (gh, logged in) and Claude
 - `ralph run <N>`: run only issue N.
 - `ralph run --model opus`: build on opus for this run (review and merge keep their models).
 - Ctrl-C stops the run and removes the lock label. An issue still open after all phases stops the run and keeps its worktree; logs and the cost ledger (ralph-costs.tsv) are in .ralph/logs/.
-- `/ralph-issue <N>` inside a Claude Code session: run issue N in that session. `ralph init` writes the skill.
+- `/ralph-issue <N> [interactive] [build|review|merge] [--model <model>]` inside a Claude Code session: run issue N in that session, each phase as a subagent. `ralph init` writes the skill to .claude/skills/ralph-issue/ and `ralph upgrade` rewrites it; it reads models and labels from the config each time it runs.
 
 ## Phases
 
@@ -41,15 +41,16 @@ The issue body is the spec and the scope.
 
 ## Commands
 
-- `ralph init [--yes]`: Write .ralph/config.json, .ralph/README.md and the .gitignore lines; --yes takes every default
+- `ralph init [--yes]`: Write .ralph/config.json, .ralph/README.md, the /ralph-issue skill and the .gitignore lines; --yes takes every default
 - `ralph run [N] [--model <model>]`: Run the loop: every ready issue in turn, or only issue N; --model (e.g. opus) overrides models.build for this run
 - `ralph config get <key>`: Print a setting, e.g. models.build
 - `ralph config set <key> <value>`: Change a setting; the value is checked before it is saved
 - `ralph doctor`: Check that this project is ready to run the loop
 - `ralph explain`: Print this explanation (same as ralph --help)
 - `ralph report [--attach-log]`: Open an issue about ralph in droruri/druri-ralph-loop; shows what is sent and asks first
-- `ralph upgrade`: Rewrite the files ralph owns in this project (the /ralph-issue skill, .ralph/README.md)
+- `ralph upgrade [--yes]`: Rewrite the files ralph owns in this project (the /ralph-issue skill, .ralph/README.md) and print the old and new versions; asks before replacing a hand-edited skill
 - `ralph progress pull|push <N>`: Sync logs/issue-<N>.progress.md with the issue's progress comment (used by the prompts)
+- `ralph worktree create|remove <N>`: Create issue N's worktree under .ralph/wt/ (running commands.install) and print its path, or remove it (used by the skill)
 - `ralph merge <N>`: Wait for CI on issue N's PR, merge it, close the issue; exit 1 when the merge phase needs Claude
 - `ralph prompt build|review|merge <N>`: Print the prompt for one phase of issue N
 

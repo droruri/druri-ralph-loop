@@ -14,11 +14,11 @@ import {
 import { doctor } from './doctor.ts';
 import { renderExplain, usage } from './docs.ts';
 import { createTracker, type Gh, GhError, ghCli } from './github.ts';
-import { init } from './init.ts';
-import { run } from './loop.ts';
+import { init, upgrade } from './init.ts';
+import { run, runEnv } from './loop.ts';
 import { renderPrompt } from './prompt.ts';
 import { report } from './report.ts';
-import { WorktreeError } from './worktree.ts';
+import { createWorktree, removeWorktree, WorktreeError } from './worktree.ts';
 
 const USAGE = usage();
 
@@ -93,6 +93,12 @@ async function dispatch(argv: string[], io: Io): Promise<number> {
         init({ cwd: io.cwd, yes: values.yes === true, ask, log: io.out }),
       );
       return 0;
+    case 'upgrade':
+      expectArgs(args, 0);
+      await withPrompter((ask) =>
+        upgrade({ cwd: io.cwd, yes: values.yes === true, ask, log: io.out }),
+      );
+      return 0;
     case 'run': {
       if (args.length > 1) throw new UsageError(`unexpected argument: ${args[1] ?? ''}`);
       const issue = args[0] === undefined ? undefined : issueNumber(args[0]);
@@ -120,6 +126,23 @@ async function dispatch(argv: string[], io: Io): Promise<number> {
       const n = issueNumber(issue);
       const tracker = await trackerFor(io);
       await (action === 'pull' ? tracker.progressPull(n, io.cwd) : tracker.progressPush(n, io.cwd));
+      return 0;
+    }
+    case 'worktree': {
+      const [action, issue] = args;
+      expectArgs(args, 2);
+      if (action !== 'create' && action !== 'remove') {
+        throw new UsageError('expected `worktree create <N>` or `worktree remove <N>`');
+      }
+      const n = issueNumber(issue);
+      const root = await findRoot(io.cwd);
+      if (action === 'remove') {
+        await removeWorktree(root, n);
+        return 0;
+      }
+      const { install } = (await loadConfig(root)).commands;
+      const env = await runEnv(root, process.env);
+      io.out(await createWorktree(root, n, { install, env, log: io.err }));
       return 0;
     }
     case 'merge': {
