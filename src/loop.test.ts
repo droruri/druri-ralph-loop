@@ -345,6 +345,16 @@ describe('ralph run <N>', () => {
     expect(await ralph(github(issue(4)), { issue: 4 })).toBe(0);
     expect(await calls()).toEqual(['sonnet build key=unset ci=true']);
   });
+
+  test('logs go to the main checkout when run from inside a worktree', async () => {
+    git(root, 'worktree', 'add', '--quiet', '-b', 'other', join(root, '.ralph/wt/other'));
+    await saveConfig(join(root, '.ralph/wt/other'), { repo: 'acme/app' });
+    await onClaude(1, close(4));
+    expect(await ralph(github(issue(4)), { issue: 4, root: join(root, '.ralph/wt/other') })).toBe(
+      0,
+    );
+    expect(await exists(join(root, '.ralph/logs/ralph-costs.tsv'))).toBe(true);
+  });
 });
 
 describe('ralph run', () => {

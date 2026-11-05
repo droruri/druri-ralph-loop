@@ -12,9 +12,16 @@ import { z } from 'zod';
 import { pluginIds } from './agents.ts';
 import { loadConfig, type Phase } from './config.ts';
 import { exists, isNotFound } from './fs.ts';
-import { createTracker, type Gh, ghCli, type Issue, type IssueState } from './github.ts';
+import {
+  createTracker,
+  type Gh,
+  ghCli,
+  type Issue,
+  type IssueState,
+  progressFile,
+} from './github.ts';
 import { renderPrompt } from './prompt.ts';
-import { createWorktree, removeWorktree } from './worktree.ts';
+import { createWorktree, mainRoot, removeWorktree } from './worktree.ts';
 
 export const LOGS_DIR = '.ralph/logs';
 const LEDGER_HEADER = 'date\tissue\tphase\tmodel\tturns\tcost_usd\tseconds\terror\n';
@@ -121,7 +128,8 @@ export async function run(opts: RunOptions): Promise<number> {
   const config = await loadConfig(root);
   const env = await runEnv(root, opts.env);
   const tracker = createTracker(config, opts.gh ?? ghCli(env), log);
-  const logsDir = join(root, LOGS_DIR);
+  // The main checkout's logs, also when run from inside a worktree (which a close removes).
+  const logsDir = join(await mainRoot(root), LOGS_DIR);
   const ledger = join(logsDir, 'ralph-costs.tsv');
   const buildModel = opts.model ?? config.models.build;
 
@@ -250,7 +258,6 @@ export async function run(opts: RunOptions): Promise<number> {
     return cost;
   }
 
-  const progressFile = (wt: string, n: number) => join(wt, 'logs', `issue-${n}.progress.md`);
   async function readProgress(wt: string, n: number): Promise<string | undefined> {
     try {
       return await readFile(progressFile(wt, n), 'utf8');

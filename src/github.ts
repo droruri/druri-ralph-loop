@@ -79,6 +79,9 @@ export interface MergeOptions {
   sleep?: (ms: number) => Promise<void>;
 }
 
+/** The progress file of issue `n` in a worktree (or any checkout) `cwd`. */
+export const progressFile = (cwd: string, n: number) => join(cwd, 'logs', `issue-${n}.progress.md`);
+
 /** The branch the loop works on for issue `n`. */
 export const branchName = (n: number) => `feature/issue-${n}`;
 
@@ -168,8 +171,6 @@ export function createTracker(
     const comments = await list(Comment, `${repo}/issues/${n}/comments?per_page=100`);
     return comments.find((c) => (c.body ?? '').startsWith(PROGRESS_MARKER))?.id;
   }
-
-  const progressFile = (cwd: string, n: number) => join(cwd, 'logs', `issue-${n}.progress.md`);
 
   /** Check runs and legacy commit statuses of a commit. */
   async function ciChecks(sha: string) {

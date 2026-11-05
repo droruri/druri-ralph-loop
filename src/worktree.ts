@@ -35,7 +35,7 @@ const hasRef = (root: string, ref: string) =>
   );
 
 /** The main checkout, also when `cwd` is inside a worktree. */
-async function mainRoot(cwd: string): Promise<string> {
+export async function mainRoot(cwd: string): Promise<string> {
   return dirname(await git(cwd, ['rev-parse', '--path-format=absolute', '--git-common-dir']));
 }
 
