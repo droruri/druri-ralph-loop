@@ -59,7 +59,7 @@ const README_PATH = '.ralph/README.md';
 export const SKILL_PATH = '.claude/skills/ralph-issue/SKILL.md';
 
 // Same relative path from `src/` (tests) and `dist/` (the built package).
-const SKILL_TEMPLATE = resolve(import.meta.dirname, '../templates/ralph-issue/SKILL.md');
+export const SKILL_TEMPLATE = resolve(import.meta.dirname, '../templates/ralph-issue/SKILL.md');
 
 /** Last line of a written skill: the ralph version and the hash of everything above it. */
 const SKILL_MARKER = /<!-- ralph (\S+) sha256:([0-9a-f]{64}) -->\n$/;

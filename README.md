@@ -48,7 +48,7 @@ The issue body is the spec and the scope.
 - `ralph doctor`: Check that this project is ready to run the loop
 - `ralph explain`: Print this explanation (same as ralph --help)
 - `ralph report [--attach-log]`: Open an issue about ralph in droruri/druri-ralph-loop; shows what is sent and asks first
-- `ralph upgrade [--yes]`: Rewrite the files ralph owns in this project (the /ralph-issue skill, .ralph/README.md) and print the old and new versions; asks before replacing a hand-edited skill
+- `ralph upgrade [--yes]`: Rewrite the files ralph owns in this project (the /ralph-issue skill, .ralph/README.md) and print the old and new versions; asks before replacing a hand-edited skill (--yes replaces it)
 - `ralph progress pull|push <N>`: Sync logs/issue-<N>.progress.md with the issue's progress comment (used by the prompts)
 - `ralph worktree create|remove <N>`: Create issue N's worktree under .ralph/wt/ (running commands.install) and print its path, or remove it (used by the skill)
 - `ralph merge <N>`: Wait for CI on issue N's PR, merge it, close the issue; exit 1 when the merge phase needs Claude

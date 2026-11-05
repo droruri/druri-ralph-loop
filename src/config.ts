@@ -4,7 +4,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 import { z } from 'zod';
-import { isNotFound } from './fs.ts';
+import { exists, isNotFound } from './fs.ts';
 
 export const CONFIG_PATH = '.ralph/config.json';
 export const SCHEMA_PATH = '.ralph/config.schema.json';
@@ -101,14 +101,26 @@ export function parseConfig(raw: unknown): ParseResult {
 
 export class ConfigError extends Error {}
 
-/** The project root holding `.ralph/`: the git top level of `cwd`, else `cwd` itself. */
+/**
+ * The project root holding `.ralph/`: the git top level of `cwd`, else `cwd` itself. Inside a
+ * worktree (such as `.ralph/wt/issue-N`) it is the main checkout when that has a config, so the
+ * commands phases run there read the live config even when `.ralph/` is not committed.
+ */
 export async function findRoot(cwd: string): Promise<string> {
+  let lines: string[];
   try {
-    const { stdout } = await promisify(execFile)('git', ['rev-parse', '--show-toplevel'], { cwd });
-    return stdout.trim();
+    const { stdout } = await promisify(execFile)(
+      'git',
+      ['rev-parse', '--show-toplevel', '--path-format=absolute', '--git-common-dir'],
+      { cwd },
+    );
+    lines = stdout.trim().split('\n');
   } catch {
     return cwd;
   }
+  const [top = cwd, common] = lines;
+  const main = common === undefined ? top : dirname(common);
+  return main !== top && (await exists(join(main, CONFIG_PATH))) ? main : top;
 }
 
 /** Reads the raw JSON object of `.ralph/config.json` in `root`. */

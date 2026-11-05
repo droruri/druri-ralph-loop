@@ -55,7 +55,7 @@ export const COMMANDS: CommandDoc[] = [
     name: 'upgrade',
     usage: 'ralph upgrade [--yes]',
     summary:
-      'Rewrite the files ralph owns in this project (the /ralph-issue skill, .ralph/README.md) and print the old and new versions; asks before replacing a hand-edited skill',
+      'Rewrite the files ralph owns in this project (the /ralph-issue skill, .ralph/README.md) and print the old and new versions; asks before replacing a hand-edited skill (--yes replaces it)',
   },
   {
     name: 'progress',

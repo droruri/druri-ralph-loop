@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, test } from 'vite-plus/test';
 import { renderProjectReadme } from './docs.ts';
-import { init, upgrade } from './init.ts';
+import { init, SKILL_PATH, SKILL_TEMPLATE, upgrade } from './init.ts';
+import { cliVersion } from './report.ts';
 
 let root = '';
 const output: string[] = [];
@@ -133,11 +134,9 @@ describe('init with prompts', () => {
   });
 });
 
-const SKILL = '.claude/skills/ralph-issue/SKILL.md';
-const template = () =>
-  readFile(join(import.meta.dirname, '../templates/ralph-issue/SKILL.md'), 'utf8');
-const version = async () =>
-  JSON.parse(await readFile(join(import.meta.dirname, '../package.json'), 'utf8')).version;
+const SKILL = SKILL_PATH;
+const template = () => readFile(SKILL_TEMPLATE, 'utf8');
+const version = cliVersion;
 
 describe('the /ralph-issue skill', () => {
   test('init writes the template with a version marker', async () => {

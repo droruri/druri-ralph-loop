@@ -38,10 +38,11 @@ Read the settings: `ralph config get repo`, `labels.lock`, `labels.blocked`,
   - labeled `<needsHuman>` or `<blocked>` → report and stop;
   - labeled `<lock>` → another ralph run holds it: report and stop;
   - otherwise it's open.
-- Lock it: `gh api repos/<repo>/issues/N/labels -f 'labels[]=<lock>'`. Remove the lock in step 7,
-  whatever the outcome.
-- `WT=$(ralph worktree create N)` and note the path `WT`. All work happens there; your own
-  checkout is never switched, so uncommitted changes in it don't matter.
+- Lock it: `gh api repos/<repo>/issues/N/labels -f 'labels[]=<lock>'`. From here on, every stop
+  (a failure, a stuck phase, a closed issue) goes through step 7, which removes the lock.
+- `WT=$(ralph worktree create N)` and note the path `WT`. If it exits non-zero or prints nothing,
+  go to step 7 and report the error. All work happens there; your own checkout is never
+  switched, so uncommitted changes in it don't matter.
 - `cd "$WT" && ralph progress pull N`.
 
 ## 3. Run each phase as a subagent
@@ -49,7 +50,8 @@ Read the settings: `ralph config get repo`, `labels.lock`, `labels.blocked`,
 For each phase, run `ralph prompt <phase> N` (from your own checkout) and keep its output verbatim as
 `<PROMPT>`. Then spawn **one** `general-purpose` Agent with `model` set to the phase's model
 (build: `--model` or `<models.build>`; review: `<models.review>`; merge: `<models.merge>`) and
-`description: "ralph #N <phase>"`. Use this prompt:
+`description: "ralph #N <phase>"`. The Agent tool takes model aliases; if it rejects the configured
+value, leave `model` unset and say so in the report. Use this prompt:
 
 ````
 <PROMPT>
@@ -57,7 +59,9 @@ For each phase, run `ralph prompt <phase> N` (from your own checkout) and keep i
 ## Running as a subagent
 
 Your working directory is this issue's worktree, <WT>. Work only inside it: start every Bash
-command with `cd <WT> &&` and give Read/Edit absolute paths under <WT>.
+command with `cd <WT> &&` and give Read/Edit absolute paths under <WT>. You run under the
+`/ralph-issue` orchestrator, not `ralph run`: where the instructions say `ralph run` does
+something (pull progress, wait for CI, merge), the orchestrator does it.
 
 You cannot launch agents yourself. Wherever the instructions above (or a skill they tell you to
 run) say to spawn an Agent, do this instead: write the progress file, then end your reply with
@@ -99,8 +103,8 @@ Read the phase agent's last reply:
   back with SendMessage.
 - **`PHASE_DONE`** or anything else → the phase is over. Go to step 6.
 
-Cap each phase at 8 relays. If a phase still isn't done after that, treat it as stuck: stop and
-report.
+Cap each phase at 8 relays. If a phase still isn't done after that, treat it as stuck: go to
+step 7 and report.
 
 ## 5. Interactive vs default
 
@@ -113,19 +117,23 @@ report.
 
 Run `gh api repos/<repo>/issues/N --jq '{state, labels: [.labels[].name]}'`.
 
-- **Closed** → stop. The issue is done, or it was found all met on the main branch.
-- **`<needsHuman>` or `<blocked>`** → stop. Quote the comment that ralph posted.
+- **Closed** → go to step 7. The issue is done, or it was found all met on the main branch.
+- **`<needsHuman>` or `<blocked>`** → go to step 7. Quote the comment that ralph posted.
 - **Open** → pick the next phase:
   - `review`, and `$WT/logs/issue-N.progress.md` has a line starting `next: step 10`: the build
     already did the small review. Skip it.
-  - `merge`, and not `interactive`: first run `cd "$WT" && ralph merge N`. Exit 0 means merged:
-    go to step 7. Otherwise spawn the merge agent.
   - Otherwise spawn the next phase's agent, fresh. Don't reuse the previous phase's agent.
-  - No phase left → stop. This is the "still open after all phases" case.
+  - No phase left → go to step 7. This is the "still open after all phases" case.
+
+**Before any merge phase** (also when `merge` is the only phase asked for), unless `interactive`:
+run `ralph merge N` in Bash with the longest timeout (600000 ms); it waits for CI, merges and
+closes the issue. Exit 0 means merged: go to step 7. On any other exit (or a timeout), check the
+issue as above first: closed → step 7; still open → spawn the merge agent. With `interactive`, the
+merge agent asks before merging instead.
 
 ## 7. Clean up and report
 
-- `gh api -X DELETE repos/<repo>/issues/N/labels/<lock>`.
+- `gh api -X DELETE repos/<repo>/issues/N/labels/<lock>` (URL-encode `<lock>`, e.g. `:` → `%3A`).
 - Issue closed → `ralph worktree remove N`. Otherwise keep the worktree and give its path.
 
 Report:
